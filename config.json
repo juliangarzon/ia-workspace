@@ -3,7 +3,10 @@
   "cache_ttl_seconds": 60,
   "claude_state_path": "~/.claude",
   "codex_state_path": "~/.codex",
-  "projects": [],
+  "projects": [
+    "/host/workera_webapps",
+    "/host/data_platform_sage"
+  ],
   "quota_limits": {
     "five_hour": null,
     "weekly": null,
