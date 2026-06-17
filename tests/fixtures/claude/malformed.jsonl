@@ -1,0 +1,4 @@
+
+not json at all but has "usage": here
+{"type": "assistant", "sessionId": "sess-2", "timestamp": "2026-05-28T15:25:53.965Z", "gitBranch": "main", "isSidechain": false, "costUSD": null, "message": {"id": "msg_100", "model": "claude-sonnet-4-5", "usage": {"input_tokens": 42, "output_tokens": 7, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0, "service_tier": "standard"}}}
+{"type": "assi "usage":
