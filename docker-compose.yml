@@ -9,7 +9,7 @@ services:
       # Removing :ro from the docker socket would grant full daemon control (host root).
       - "${HOME}/.claude:/home/appuser/.claude:ro"
       - "${HOME}/.codex:/home/appuser/.codex:ro"
-      - /var/run/docker.sock:/var/run/docker.sock:ro  # read-only daemon access
+      - ${HOME}/.orbstack/run/docker.sock:/var/run/docker.sock:ro  # OrbStack socket (macOS)
     environment:
       - HOME=/home/appuser
     restart: unless-stopped
