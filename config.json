@@ -1,0 +1,12 @@
+{
+  "poll_interval_seconds": 5,
+  "cache_ttl_seconds": 60,
+  "claude_state_path": "~/.claude",
+  "codex_state_path": "~/.codex",
+  "projects": [],
+  "quota_limits": {
+    "five_hour": null,
+    "weekly": null,
+    "monthly": null
+  }
+}

@@ -1,0 +1,12 @@
+[project]
+name = "workspace-monitor"
+version = "0.1.0"
+description = "Monitor for Claude and Codex workspace state and quota usage"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
