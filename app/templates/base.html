@@ -463,7 +463,7 @@
     }
 
     function renderIA(data) {
-      const connectors = data.connectors || [];
+      const connectors = (data.connectors || []).filter(c => c.connector_id !== "docker");
       if (connectors.length === 0) {
         return `<div class="empty">No connectors configured</div>`;
       }
