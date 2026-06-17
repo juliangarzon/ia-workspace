@@ -370,6 +370,13 @@
       return s.length > n ? s.slice(0, n - 1) + "…" : s;
     }
 
+    function fmtTokens(n) {
+      if (n == null) return "—";
+      if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
+      if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
+      return String(n);
+    }
+
     /* ---------- IA tab ---------- */
     const WINDOW_LABELS = {
       five_hour: "5-hour limit",
@@ -385,7 +392,7 @@
         <div class="quota-row">
           <span class="quota-label">${esc(label)}</span>
           <span class="bar ${barClass(pct)}"><span style="width:${width}%"></span></span>
-          <span class="quota-pct">${pct == null ? "—" : pct + "%"}</span>
+          <span class="quota-pct">${pct == null ? fmtTokens(w && w.used) : pct + "%"}</span>
           <span class="quota-reset" data-reset="${w && w.resets_at ? esc(w.resets_at) : ""}">${reset ? "resets " + reset : ""}</span>
         </div>`;
     }
