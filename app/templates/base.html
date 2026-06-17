@@ -155,6 +155,7 @@
     .bar-green > span { background: var(--green); }
     .bar-yellow > span { background: var(--yellow); }
     .bar-red > span { background: var(--red); }
+    .bar-neutral > span { background: var(--accent); }
 
     .quota-pct { text-align: right; font-variant-numeric: tabular-nums; }
     .quota-reset { text-align: right; color: var(--muted); font-size: 12px; }
@@ -335,6 +336,46 @@
       return Math.round(hrs / 24) + "d";
     }
 
+    const WINDOW_DURATION = {
+      five_hour: 5 * 3600,
+      weekly: 7 * 86400,
+      monthly: null // computed from resets_at (1st of next month)
+    };
+
+    function fmtDur(secs) {
+      if (secs == null || isNaN(secs)) return "";
+      secs = Math.max(0, Math.round(secs));
+      const d = Math.floor(secs / 86400);
+      const h = Math.floor((secs % 86400) / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      if (d > 0) return d + "d " + h + "h";
+      if (h > 0) return h + "h " + m + "m";
+      return m + "m";
+    }
+
+    // "3h 12m / 5h · resets 1h" — elapsed in window plus time remaining
+    function fmtWindowStatus(iso, windowType) {
+      if (!iso) return "";
+      const resetsAt = new Date(iso);
+      const secondsUntil = (resetsAt.getTime() - Date.now()) / 1000;
+      if (isNaN(secondsUntil)) return "";
+
+      let duration = WINDOW_DURATION[windowType];
+      if (windowType === "monthly") {
+        // resets_at is the 1st of next month; days in current window = day-of-month - 1... but it's the 1st,
+        // so use the month that just ended: days in the previous month.
+        const prevMonthEnd = new Date(resetsAt.getFullYear(), resetsAt.getMonth(), 0);
+        duration = prevMonthEnd.getDate() * 86400;
+      }
+      if (duration == null) return "resets " + fmtReset(iso);
+
+      const elapsed = duration - secondsUntil;
+      const total = fmtDur(duration);
+      const used = fmtDur(elapsed);
+      const remaining = secondsUntil <= 0 ? "now" : fmtReset(iso);
+      return used + " / " + total + " · resets " + remaining;
+    }
+
     function fmtRelative(iso) {
       if (!iso) return "—";
       const ms = Date.now() - new Date(iso).getTime();
@@ -384,16 +425,27 @@
       monthly: "Monthly"
     };
 
-    function quotaRow(label, w) {
+    function quotaRow(label, w, windowType, monthlyUsed) {
       const pct = w && w.percent != null ? Math.round(w.percent) : null;
-      const width = pct == null ? 0 : Math.min(100, pct);
-      const reset = w ? fmtReset(w.resets_at) : "";
+      let width = 0;
+      let cls;
+      if (pct != null) {
+        width = Math.min(100, pct);
+        cls = barClass(pct);
+      } else if (w && monthlyUsed > 0) {
+        // No absolute limit: fill relative to the monthly total
+        width = Math.min(100, (w.used / monthlyUsed) * 100);
+        cls = "bar-neutral";
+      } else {
+        cls = "bar-neutral";
+      }
+      const status = w ? fmtWindowStatus(w.resets_at, windowType) : "";
       return `
         <div class="quota-row">
           <span class="quota-label">${esc(label)}</span>
-          <span class="bar ${barClass(pct)}"><span style="width:${width}%"></span></span>
+          <span class="bar ${cls}"><span style="width:${width}%"></span></span>
           <span class="quota-pct">${pct == null ? fmtTokens(w && w.used) : pct + "%"}</span>
-          <span class="quota-reset" data-reset="${w && w.resets_at ? esc(w.resets_at) : ""}">${reset ? "resets " + reset : ""}</span>
+          <span class="quota-reset" data-reset="${w && w.resets_at ? esc(w.resets_at) : ""}" data-window="${esc(windowType || "")}">${status}</span>
         </div>`;
     }
 
@@ -409,10 +461,12 @@
       const tw = c.token_windows;
       let quota = "";
       if (tw) {
+        // When no absolute limit, normalize bars to monthly total
+        const monthlyUsed = tw && tw.monthly ? tw.monthly.used : 0;
         quota = `<div class="card-section">
-          ${quotaRow(WINDOW_LABELS.five_hour, tw.five_hour)}
-          ${quotaRow(WINDOW_LABELS.weekly, tw.weekly)}
-          ${quotaRow(WINDOW_LABELS.monthly, tw.monthly)}
+          ${quotaRow(WINDOW_LABELS.five_hour, tw.five_hour, "five_hour", monthlyUsed)}
+          ${quotaRow(WINDOW_LABELS.weekly, tw.weekly, "weekly", monthlyUsed)}
+          ${quotaRow(WINDOW_LABELS.monthly, tw.monthly, "monthly", monthlyUsed)}
         </div>`;
       } else {
         quota = `<div class="card-section"><span class="quota-label">No quota data</span></div>`;
@@ -545,8 +599,8 @@
     function refreshResets() {
       document.querySelectorAll("[data-reset]").forEach(el => {
         const iso = el.getAttribute("data-reset");
-        const r = fmtReset(iso);
-        el.textContent = r ? "resets " + r : "";
+        const windowType = el.getAttribute("data-window");
+        el.textContent = fmtWindowStatus(iso, windowType);
       });
     }
 
