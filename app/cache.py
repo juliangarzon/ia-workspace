@@ -42,6 +42,12 @@ class SnapshotCache:
             self._built_at = time.monotonic()
             return snapshot
 
+    def set_project_paths(self, project_paths: list[Path]) -> None:
+        """Replace the tracked project paths and force a rebuild on next get()."""
+        with self._lock:
+            self._project_paths = project_paths
+            self._built_at = None
+
     def invalidate(self) -> None:
         """Force next get() to rebuild."""
         with self._lock:

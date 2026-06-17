@@ -10,6 +10,9 @@ services:
       - "${HOME}/.claude:/root/.claude:ro"
       - "${HOME}/.codex:/root/.codex:ro"
       - ${HOME}/.orbstack/run/docker.sock:/var/run/docker.sock:ro  # OrbStack socket (macOS)
+      - ./config.json:/app/config.json   # writable: UI saves project paths here, persists on host
+      - "${HOME}/Env/workera_webapps:/host/workera_webapps:ro"
+      - "${HOME}/Env/data_platform_sage:/host/data_platform_sage:ro"
     environment:
       - HOME=/root
     restart: unless-stopped

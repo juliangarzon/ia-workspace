@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -67,6 +68,21 @@ async def get_project(name: str) -> dict[str, object]:
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return project.model_dump(mode="json")
+
+
+@app.post("/api/config/projects")
+async def update_projects(paths: list[str] = Body(...)) -> dict[str, object]:
+    config = app.state.config
+    config_path = Path(__file__).resolve().parent.parent / "config.json"
+
+    raw = json.loads(config_path.read_text())
+    raw["projects"] = paths
+    config_path.write_text(json.dumps(raw, indent=2))
+
+    config.projects = paths
+    app.state.cache.set_project_paths([Path(p) for p in paths])
+
+    return {"ok": True, "projects": paths}
 
 
 @app.get("/healthz")
