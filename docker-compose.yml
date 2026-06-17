@@ -1,0 +1,15 @@
+version: "3.9"
+services:
+  workspace-monitor:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"   # bind to localhost only, not 0.0.0.0
+    volumes:
+      # Read-only state mounts — the :ro suffix is load-bearing.
+      # Removing :ro from the docker socket would grant full daemon control (host root).
+      - "${HOME}/.claude:/home/appuser/.claude:ro"
+      - "${HOME}/.codex:/home/appuser/.codex:ro"
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # read-only daemon access
+    environment:
+      - HOME=/home/appuser
+    restart: unless-stopped
