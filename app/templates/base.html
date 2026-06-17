@@ -106,6 +106,58 @@
 
     .card.unavailable { opacity: 0.7; }
 
+    /* Project manager */
+    .project-manager { margin-bottom: 24px; }
+    .pm-status { font-size: 12px; font-weight: 400; color: var(--muted); }
+    .pm-status.ok { color: var(--accent); }
+    .pm-status.err { color: var(--red); }
+    .pm-list { list-style: none; margin: 0 0 12px; padding: 0; }
+    .pm-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 6px 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+    }
+    .pm-list li + li { border-top: 1px solid var(--border); }
+    .pm-empty { color: var(--muted); font-style: italic; }
+    .pm-remove {
+      flex: none;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      padding: 0 4px;
+    }
+    .pm-remove:hover { color: var(--red); }
+    .pm-add { display: flex; gap: 8px; margin-bottom: 12px; }
+    .pm-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      padding: 8px 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+    }
+    .pm-input:focus { outline: none; border-color: var(--accent); }
+    .pm-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      cursor: pointer;
+      padding: 8px 14px;
+      font-size: 13px;
+    }
+    .pm-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .pm-save { width: 100%; }
+
     .card-head {
       display: flex;
       align-items: center;
@@ -301,6 +353,21 @@
       <div id="docker-content"></div>
     </section>
     <section id="tab-projects" class="tab-panel" data-tab="projects">
+      <div class="card project-manager" id="project-manager">
+        <div class="card-head">
+          <span>Configured projects</span>
+          <span class="pm-status" id="pm-status"></span>
+        </div>
+        <div class="card-section">
+          <ul class="pm-list" id="pm-list"></ul>
+          <div class="pm-add">
+            <input type="text" id="pm-input" class="pm-input"
+                   placeholder="/absolute/path/to/project" autocomplete="off" spellcheck="false" />
+            <button type="button" class="pm-btn" id="pm-add-btn">Add</button>
+          </div>
+          <button type="button" class="pm-btn pm-save" id="pm-save-btn">Save changes</button>
+        </div>
+      </div>
       <div id="projects-content"></div>
     </section>
   </main>
@@ -427,23 +494,23 @@
 
     function quotaRow(label, w, windowType, monthlyUsed) {
       const pct = w && w.percent != null ? Math.round(w.percent) : null;
-      let width = 0;
-      let cls;
-      if (pct != null) {
-        width = Math.min(100, pct);
-        cls = barClass(pct);
-      } else if (w && monthlyUsed > 0) {
-        // No absolute limit: fill relative to the monthly total
-        width = Math.min(100, (w.used / monthlyUsed) * 100);
-        cls = "bar-neutral";
-      } else {
-        cls = "bar-neutral";
-      }
       const status = w ? fmtWindowStatus(w.resets_at, windowType) : "";
+      let bar;
+      if (pct != null) {
+        const width = Math.min(100, pct);
+        bar = `<span class="bar ${barClass(pct)}"><span style="width:${width}%"></span></span>`;
+      } else if (windowType !== "monthly" && monthlyUsed > 0) {
+        // No limit configured: show usage as a share of the monthly total
+        const width = Math.min(100, (w.used / monthlyUsed) * 100);
+        bar = `<span class="bar bar-neutral"><span style="width:${width}%"></span></span>`;
+      } else {
+        // Monthly with no limit (always 100% of itself) or no monthly total: just the count
+        bar = `<span></span>`;
+      }
       return `
         <div class="quota-row">
           <span class="quota-label">${esc(label)}</span>
-          <span class="bar ${cls}"><span style="width:${width}%"></span></span>
+          ${bar}
           <span class="quota-pct">${pct == null ? fmtTokens(w && w.used) : pct + "%"}</span>
           <span class="quota-reset" data-reset="${w && w.resets_at ? esc(w.resets_at) : ""}" data-window="${esc(windowType || "")}">${status}</span>
         </div>`;
@@ -587,8 +654,79 @@
       return html + `</tbody></table>`;
     }
 
+    /* ---------- project manager ---------- */
+    let configuredPaths = [];
+    let pmInitialized = false;
+
+    function renderPmList() {
+      const list = document.getElementById("pm-list");
+      if (configuredPaths.length === 0) {
+        list.innerHTML = `<li class="pm-empty">No projects configured</li>`;
+        return;
+      }
+      list.innerHTML = configuredPaths.map((path, i) => `
+        <li>
+          <span>${esc(path)}</span>
+          <button type="button" class="pm-remove" data-index="${i}" title="Remove" aria-label="Remove">&times;</button>
+        </li>`).join("");
+    }
+
+    function setPmStatus(text, kind) {
+      const el = document.getElementById("pm-status");
+      el.textContent = text || "";
+      el.className = "pm-status" + (kind ? " " + kind : "");
+    }
+
+    function addPmPath() {
+      const input = document.getElementById("pm-input");
+      const value = input.value.trim();
+      if (!value) return;
+      if (!configuredPaths.includes(value)) {
+        configuredPaths.push(value);
+        renderPmList();
+      }
+      input.value = "";
+      input.focus();
+      setPmStatus("");
+    }
+
+    async function savePmPaths() {
+      setPmStatus("Saving…");
+      try {
+        const res = await fetch("/api/config/projects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(configuredPaths),
+        });
+        if (!res.ok) throw new Error("bad status " + res.status);
+        setPmStatus("Saved", "ok");
+        poll();
+      } catch (e) {
+        setPmStatus("Error", "err");
+      }
+    }
+
+    function initProjectManager(data) {
+      configuredPaths = (data.projects || []).map(p => p.path).filter(Boolean);
+      renderPmList();
+      document.getElementById("pm-add-btn").addEventListener("click", addPmPath);
+      document.getElementById("pm-input").addEventListener("keydown", e => {
+        if (e.key === "Enter") { e.preventDefault(); addPmPath(); }
+      });
+      document.getElementById("pm-save-btn").addEventListener("click", savePmPaths);
+      document.getElementById("pm-list").addEventListener("click", e => {
+        const btn = e.target.closest(".pm-remove");
+        if (!btn) return;
+        configuredPaths.splice(Number(btn.dataset.index), 1);
+        renderPmList();
+        setPmStatus("");
+      });
+      pmInitialized = true;
+    }
+
     /* ---------- render + poll ---------- */
     function render(data) {
+      if (!pmInitialized) initProjectManager(data);
       document.getElementById("ia-content").innerHTML = renderIA(data);
       document.getElementById("docker-content").innerHTML = renderDocker(data);
       document.getElementById("projects-content").innerHTML = renderProjects(data);

@@ -45,7 +45,9 @@ def _dirty(path: Path) -> bool | None:
     status = _run_git(path, ["status", "--porcelain"])
     if status is None:
         return None
-    return status != ""
+    # Ignore untracked files (lines starting with "??")
+    tracked_changes = [l for l in status.splitlines() if not l.startswith("??")]
+    return bool(tracked_changes)
 
 
 def _ahead_behind(path: Path) -> tuple[int | None, int | None]:
