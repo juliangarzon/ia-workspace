@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plan: AI Workspace Monitor (v1)</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2d3147;
+      --text: #e2e8f0;
+      --muted: #8892a4;
+      --accent: #6366f1;
+      --green: #10b981;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mono: "JetBrains Mono", "Fira Code", monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.7;
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 3rem 2rem;
+    }
+    header {
+      margin-bottom: 2.5rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--border);
+    }
+    header .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: var(--accent);
+      margin-bottom: .5rem;
+    }
+    header h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: .75rem; }
+    header .summary { color: var(--muted); }
+    header .meta { color: var(--muted); margin-top: 1rem; font-size: 13px; }
+    header .meta code { font-size: 12px; }
+    .progress-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: .4rem;
+      display: flex;
+      justify-content: space-between;
+    }
+    .progress-bar {
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      margin-bottom: 2rem;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--green);
+      border-radius: 3px;
+      transition: width .3s ease;
+    }
+    section { margin-bottom: 2.5rem; }
+    h2 {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 1rem;
+    }
+    .scope-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    .scope-box {
+      background: var(--surface);
+      border-radius: 6px;
+      padding: 1rem;
+    }
+    .scope-box h3 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: .75rem;
+    }
+    .scope-in h3  { color: var(--green); }
+    .scope-out h3 { color: var(--muted); }
+    .scope-box ul { list-style: none; font-size: 14px; }
+    .scope-in  li::before { content: "\2713 "; color: var(--green); }
+    .scope-out li::before { content: "\2717 "; color: var(--muted); }
+    .scope-box li { margin-bottom: .3rem; }
+    .success-list { list-style: none; }
+    .success-list li {
+      padding: .4rem .75rem;
+      margin-bottom: .3rem;
+      background: #10b98111;
+      border-left: 3px solid var(--green);
+      border-radius: 0 4px 4px 0;
+      font-size: 14px;
+    }
+    .group-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      margin: 1.5rem 0 .5rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    .group-label:first-of-type { margin-top: 0; }
+    .agent-tag {
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: .1em .5em;
+      border-radius: 3px;
+      background: #6366f122;
+      color: var(--accent);
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    .task-list { list-style: none; }
+    .task {
+      display: flex;
+      align-items: flex-start;
+      gap: .75rem;
+      padding: .55rem .75rem;
+      border-radius: 6px;
+      margin-bottom: .2rem;
+      transition: background .1s;
+    }
+    .task:hover { background: var(--surface); }
+    .task input[type=checkbox] {
+      margin-top: .25rem;
+      accent-color: var(--accent);
+      width: 15px;
+      height: 15px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .task label { cursor: pointer; flex: 1; font-size: 14px; }
+    .task.done label { text-decoration: line-through; color: var(--muted); }
+    .task .ac {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: .25rem;
+    }
+    .task .ac strong { color: var(--text); font-weight: 600; }
+    .badge { display: inline-block; padding: .1em .5em; border-radius: 3px; font-size: 10px; font-weight: 700; margin-left: .4rem; vertical-align: middle; letter-spacing: .03em; }
+    .badge.risk { background: #ef444422; color: var(--red); }
+    .badge.open { background: #f59e0b22; color: var(--yellow); }
+    .assumptions-list {
+      list-style: none;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .assumptions-list li {
+      padding: .35rem .75rem;
+      margin-bottom: .25rem;
+      border-left: 2px solid var(--border);
+    }
+    .clarifications { display: flex; flex-direction: column; gap: .75rem; }
+    .qa {
+      background: var(--surface);
+      border-radius: 6px;
+      padding: .75rem 1rem;
+    }
+    .qa .q { font-size: 12px; color: var(--muted); margin-bottom: .3rem; }
+    .qa .a { font-size: 14px; }
+    .export-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border);
+    }
+    .export-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .55rem 1.1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: var(--font);
+      transition: border-color .15s, color .15s;
+    }
+    .export-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .export-hint { font-size: 12px; color: var(--muted); transition: color .3s; }
+    .export-hint.copied { color: var(--green); }
+
+    .phases {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin: 1.5rem 0;
+      flex-wrap: wrap;
+    }
+    .phase {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .3rem;
+    }
+    .phase-dot {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .phase.active .phase-dot {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+    .phase.done .phase-dot {
+      border-color: var(--green);
+      background: var(--green);
+      color: #fff;
+    }
+    .phase-label {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+      max-width: 80px;
+    }
+    .phase.active .phase-label { color: var(--text); font-weight: 600; }
+    .phase-line {
+      flex: 1;
+      height: 2px;
+      background: var(--border);
+      min-width: 24px;
+      margin-bottom: 18px;
+    }
+    .phase-line.done { background: var(--green); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="label">Plan &middot; 0000-workspace-monitor</div>
+    <h1 id="plan-title">AI Workspace Monitor (v1)</h1>
+    <p class="summary" id="plan-summary">Build a read-only FastAPI dashboard that watches local AI coding workspaces via pluggable connectors. v1 ships: a connector framework, a Claude connector (quota windows, sessions, scheduled tasks), a read-only Docker connector, git/project monitoring, and a polling web dashboard with "IA", "Docker", and "Projects" tabs. Strictly observe-only; no writes to workspaces, no container control.</p>
+    <p class="meta">Stack: <code>Python + FastAPI</code> &middot; JSON config, no DB &middot; Deploy: Docker with state dirs + <code>docker.sock</code> mounted <code>:ro</code> &middot; Spec: <code>SPEC.html</code></p>
+  </header>
+
+  <div class="progress-label">
+    <span id="progress-text">0 / 0 done</span>
+    <span id="progress-pct">0%</span>
+  </div>
+  <div class="progress-bar">
+    <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+  </div>
+
+  <section>
+    <h2>Phases</h2>
+    <div class="phases">
+      <div class="phase active">
+        <div class="phase-dot">1</div>
+        <div class="phase-label">Foundation</div>
+      </div>
+      <div class="phase-line"></div>
+      <div class="phase">
+        <div class="phase-dot">2</div>
+        <div class="phase-label">Claude connector</div>
+      </div>
+      <div class="phase-line"></div>
+      <div class="phase">
+        <div class="phase-dot">3</div>
+        <div class="phase-label">Docker connector</div>
+      </div>
+      <div class="phase-line"></div>
+      <div class="phase">
+        <div class="phase-dot">4</div>
+        <div class="phase-label">Git / projects</div>
+      </div>
+      <div class="phase-line"></div>
+      <div class="phase">
+        <div class="phase-dot">5</div>
+        <div class="phase-label">Dashboard</div>
+      </div>
+      <div class="phase-line"></div>
+      <div class="phase">
+        <div class="phase-dot">6</div>
+        <div class="phase-label">Package</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Scope</h2>
+    <div class="scope-grid">
+      <div class="scope-box scope-in">
+        <h3>In (v1)</h3>
+        <ul id="scope-in">
+          <li>Connector framework + registry</li>
+          <li>Claude connector: 5h / weekly / monthly quota windows</li>
+          <li>Sessions/agents with active-vs-stale status</li>
+          <li>Scheduled tasks list</li>
+          <li>Docker connector (read-only): status, uptime, CPU/mem, ports</li>
+          <li>Git/project monitoring (branch, dirty, last commit)</li>
+          <li>Web dashboard: IA / Docker / Projects tabs, client polling</li>
+          <li>In-process snapshot cache (TTL)</li>
+          <li>Docker image + compose with read-only mounts</li>
+        </ul>
+      </div>
+      <div class="scope-box scope-out">
+        <h3>Out</h3>
+        <ul id="scope-out">
+          <li>Any write or control (sessions, tasks, containers)</li>
+          <li>Process inspection / <code>/proc</code> reads</li>
+          <li>Push notifications / alerts / webhooks</li>
+          <li>Multi-user auth / RBAC</li>
+          <li>Historical warehouse / trend charts</li>
+          <li>Cost/billing in dollars, usage credits</li>
+          <li>Multi-host / remote aggregation</li>
+          <li>Codex connector (best-effort fast-follow, not a v1 gate)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Success Criteria</h2>
+    <ul class="success-list" id="success-list">
+      <li>IA tab shows a Claude card with 5h/weekly/monthly windows (used, percent when limit configured, "resets in X"), refreshing without reload.</li>
+      <li>Window usage matches Claude's own widget within a few points when limits are configured.</li>
+      <li>Adding a connector = one new module under <code>connectors/</code>; aggregator, API, dashboard shell untouched.</li>
+      <li>Active sessions appear within one cache TTL; stale ones visibly distinguished.</li>
+      <li>Docker tab lists containers (name, image, status, uptime, CPU %, mem, ports); clean "no data" when socket unmounted.</li>
+      <li>Projects tab lists workspaces with git status; clean state when not a repo.</li>
+      <li>Service never writes to mounts, never issues a mutating Docker call, never returns raw transcript text.</li>
+      <li>Full snapshot rebuild over tens of projects completes well under the poll interval.</li>
+      <li>Missing/malformed sources degrade to partial data, no crash; parse-error counts surfaced on <code>/healthz</code>.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Action Items</h2>
+    <ul class="task-list" id="task-list">
+
+      <!-- PHASE 1: Foundation -->
+      <li class="group-label">Phase 1 &middot; Foundation <span class="agent-tag">backend-agent</span></li>
+
+      <li class="task" data-id="1">
+        <input type="checkbox" id="t1">
+        <label for="t1">Scaffold the FastAPI project: <code>app/</code> package, <code>connectors/</code>, <code>tests/</code>, <code>pyproject.toml</code>/<code>requirements.txt</code>, pinned deps (fastapi, uvicorn, docker SDK, jinja2). Add <code>config.json</code> loader (poll interval, cache TTL, source paths, optional plan limits).
+          <span class="ac"><strong>Done when:</strong> <code>uvicorn app.main:app</code> boots, <code>/healthz</code> returns 200. <em>backend-agent</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="2">
+        <input type="checkbox" id="t2">
+        <label for="t2">Define the snapshot data model (Pydantic): <code>Snapshot</code>, <code>Connector</code>, <code>TokenWindows</code>, <code>QuotaWindow</code>, <code>TokenBreakdown</code>, <code>Session</code> (incl. <code>last_event_at</code>, <code>activity_state</code>, <code>is_sidechain</code>, <code>git_branch</code>), <code>ScheduledTask</code>, <code>DockerContainer</code>, plus a <code>Project</code> type for git monitoring, exactly per SPEC "Data Model".
+          <span class="ac"><strong>Done when:</strong> models import, serialize to the documented JSON shapes; unit test round-trips a sample. <em>backend-agent</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="3">
+        <input type="checkbox" id="t3">
+        <label for="t3">Define the connector interface (<code>connectors/base.py</code>): <code>id</code>, <code>label</code>, declared <code>sources</code>, <code>available()</code>, <code>collect() -&gt; ConnectorSnapshot</code>. Build a registry that discovers/registers connectors; the aggregator depends only on this interface.
+          <span class="ac"><strong>Done when:</strong> a stub connector registers and the aggregator merges it with zero core changes (proves the extension point). <em>backend-agent</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="4">
+        <input type="checkbox" id="t4">
+        <label for="t4">Build the aggregator + in-process snapshot cache (TTL from config). Merges per-connector contributions into one <code>Snapshot</code>; absent/unavailable sources contribute nothing and are flagged.
+          <span class="ac"><strong>Done when:</strong> unit test shows repeated reads within TTL hit cache (collect called once); expiry triggers a rebuild. <em>backend-agent</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="5">
+        <input type="checkbox" id="t5">
+        <label for="t5">Wire core API routes: <code>GET /api/snapshot</code>, <code>GET /healthz</code> (reports per-source availability + parse-error counters). Registry empty for now.
+          <span class="ac"><strong>Done when:</strong> <code>/api/snapshot</code> returns valid (empty) snapshot; <code>/healthz</code> shows source status. <em>backend-agent</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="6">
+        <input type="checkbox" id="t6">
+        <label for="t6">Unit tests for the framework: registry merge of multiple stub connectors, cache TTL behavior, snapshot serialization, missing-source flagging.
+          <span class="ac"><strong>Done when:</strong> <code>pytest tests/test_framework.py</code> green. <em>backend-agent</em> &rarr; <em>test-reviewer</em></span>
+        </label>
+      </li>
+
+      <!-- PHASE 2: Claude connector -->
+      <li class="group-label">Phase 2 &middot; Claude connector <span class="agent-tag">backend-agent</span></li>
+
+      <li class="task" data-id="7">
+        <input type="checkbox" id="t7">
+        <label for="t7"><span class="badge open">open</span> Confirm against real <code>~/.claude</code> the exact layouts: <code>stats-cache.json</code> keys, transcript JSONL <code>usage</code> object (incl. tiered <code>cache_creation.ephemeral_5m/1h_input_tokens</code> vs flat <code>cache_creation_input_tokens</code>), presence of <code>costUSD</code>, <code>gitBranch</code>, and <code>isSidechain</code> on records, multiple partial records per <code>message.id</code> (streaming dedup), <code>sessions/&lt;pid&gt;.json</code> fields + <code>lastEventAt</code>, and the <code>scheduled-tasks/&lt;routine&gt;/</code> config file name/format. Capture findings in LESSONS.md and build test fixtures mirroring them (include a multi-chunk <code>message.id</code> sequence and a sidechain record).
+          <span class="ac"><strong>Done when:</strong> fixture dir under <code>tests/fixtures/claude/</code> matches real shapes (with a streaming-dedup case and a sidechain case); open questions on limits/reset/cadence resolved or documented. <em>main-agent reads</em> &rarr; <em>backend-agent fixtures</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="7b">
+        <input type="checkbox" id="t7b">
+        <label for="t7b"><span class="badge risk">critical</span> Build the JSONL streaming parser (shared by token + session logic): for each line, prefilter with <code>b'"usage":' in line</code> before <code>json.loads</code>; <strong>dedup by <code>message.id</code></strong> keeping only the last record per id; drop turns whose four token counts sum to zero; <strong>filter <code>isSidechain: true</code></strong> records out of top-level usage/sessions; read <code>costUSD</code> directly (pricing-table fallback only when absent); handle both flat and tiered <code>cache_creation</code> shapes; extract <code>gitBranch</code> and <code>lastEventAt</code> per record.
+          <span class="ac"><strong>Done when:</strong> unit tests prove dedup collapses a multi-chunk <code>message.id</code> to one final count (no inflation), zero-token turns dropped, sidechain records excluded, both cache shapes summed, <code>costUSD</code> read with fallback. <em>backend-agent</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="8">
+        <input type="checkbox" id="t8">
+        <label for="t8">Implement quota-window bucketing <strong>on the deduped record stream from #7b</strong>: sum <code>input/output/cache_creation/cache_read</code> tokens, bucket each turn into 5h / weekly / monthly windows by UTC timestamp in a single configured TZ. Use <code>stats-cache.json</code> as the fast path for coarse window usage. Dedup + sidechain filtering must run before bucketing.
+          <span class="ac"><strong>Done when:</strong> unit tests cover boundary timestamps, summation on deduped input, and stream-read (no whole-file loads). <em>backend-agent</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="9">
+        <input type="checkbox" id="t9">
+        <label for="t9">Compute <code>QuotaWindow</code> fields: <code>used</code>, <code>limit</code> (from operator config, else null), <code>percent</code> = used/limit (null when no limit), <code>resets_at</code> per the confirmed reset semantics. Fall back to raw-usage display when no limit configured.
+          <span class="ac"><strong>Done when:</strong> tests assert percent math + null-limit handling + resets_at; configured and unconfigured limit cases both pass. <em>backend-agent</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="10">
+        <input type="checkbox" id="t10">
+        <label for="t10">Implement session detection: read <code>sessions/&lt;pid&gt;.json</code> + <code>lastEventAt</code> from the transcript, derive <code>activity_state</code> from time since last event — <strong>&lt;15s thinking, &lt;60s active, &gt;60s idle/stale</strong> (thresholds configurable). Set <code>git_branch</code> from the JSONL <code>gitBranch</code> (no git subprocess). Exclude <code>isSidechain</code> records from the top-level list. Attribute to projects via <code>cwd</code>. Never claim "running" on presence alone.
+          <span class="ac"><strong>Done when:</strong> tests cover thinking/active/idle by elapsed time, orphaned-file, sidechain-excluded, and <code>git_branch</code>-from-JSONL cases. <em>backend-agent</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="11">
+        <input type="checkbox" id="t11">
+        <label for="t11">Implement scheduled-task listing: one entry per folder under <code>scheduled-tasks/</code>; parse cadence into <code>schedule</code>/<code>next_run</code> if the config format is confirmed, else list by name with <code>schedule = null</code>.
+          <span class="ac"><strong>Done when:</strong> tasks listed from fixture folders; cadence parsed when present, null otherwise. <em>backend-agent</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="12">
+        <input type="checkbox" id="t12">
+        <label for="t12">Assemble the Claude connector: register it, set <code>token_data = "full"</code>, emit windows + sessions + tasks. Tolerant parsing throughout (truncated JSONL skipped, missing keys default, parse errors counted not raised).
+          <span class="ac"><strong>Done when:</strong> integration test against fixtures asserts the merged snapshot; resilience test feeds truncated JSONL + missing keys + absent mount without crashing. <em>backend-agent</em> &rarr; <em>code-reviewer</em>, <em>test-reviewer</em></span>
+        </label>
+      </li>
+
+      <!-- PHASE 3: Docker connector -->
+      <li class="group-label">Phase 3 &middot; Docker connector (read-only) <span class="agent-tag">backend-agent</span></li>
+
+      <li class="task" data-id="13">
+        <input type="checkbox" id="t13">
+        <label for="t13"><span class="badge risk">risk</span> Implement the Docker connector via the Docker SDK over the socket: list containers, map to <code>DockerContainer</code> (id, name, image, status, uptime, CPU %, mem used/limit, port mappings) from one non-streaming stats sample per refresh. <strong>Only read calls</strong> &mdash; never a start/stop/restart/mutating call.
+          <span class="ac"><strong>Done when:</strong> against a stub Docker client, rows map correctly AND a test asserts no mutating SDK method is ever invoked. <em>backend-agent</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="14">
+        <input type="checkbox" id="t14">
+        <label for="t14">Handle Docker degradation: socket absent/unreachable &rarr; <code>available = false</code>, empty <code>docker_containers</code>, no crash. Stopped/exited container with no live stats &rarr; list it with status+uptime, resource fields null/zero (don't drop the row). Add <code>GET /api/docker</code>.
+          <span class="ac"><strong>Done when:</strong> tests cover socket-absent and no-stats cases; <code>/api/docker</code> returns documented shape. <em>backend-agent</em> &rarr; <em>security-reviewer</em> (socket access, <code>:ro</code> guarantee)</span>
+        </label>
+      </li>
+
+      <!-- PHASE 4: Git / projects -->
+      <li class="group-label">Phase 4 &middot; Git / project monitoring <span class="agent-tag">backend-agent</span></li>
+
+      <li class="task" data-id="15">
+        <input type="checkbox" id="t15">
+        <label for="t15"><span class="badge open">open</span> Confirm exact git/projects metrics with the user (proposed: per-workspace branch, dirty/clean, ahead/behind, last-commit time/message, last-activity). Discover projects from session <code>cwd</code> + transcript project folders; read git state read-only.
+          <span class="ac"><strong>Done when:</strong> metric set agreed and noted in SPEC/LESSONS. <em>main-agent confirms</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="16">
+        <input type="checkbox" id="t16">
+        <label for="t16">Implement git/project monitoring <strong>for the Projects tab only</strong>: build the <code>projects[]</code> list, reading git metadata read-only (no fetch, no write) for each configured repo. <strong>Scope note:</strong> branch-per-AI-session is <em>not</em> done here — it comes from the JSONL <code>gitBranch</code> in #10. The git connector exists to show repo state (branch, dirty/clean, ahead/behind, last commit) across all configured repos, including those with no active session. Non-repo or missing dir &rarr; clean partial state, not an error.
+          <span class="ac"><strong>Done when:</strong> tests cover a clean repo, a dirty repo, and a non-repo dir; <code>/api/projects/{name}</code> drill-down works; no per-session git subprocess fan-out. <em>backend-agent</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="17">
+        <input type="checkbox" id="t17">
+        <label for="t17"><span class="badge risk">risk</span> Harden <code>/api/projects/{name}</code> against path traversal: resolve only against the discovered project set; reject unknown names. Never build a filesystem path from raw client input.
+          <span class="ac"><strong>Done when:</strong> test asserts unknown/<code>../</code> names are rejected; only known projects resolve. <em>backend-agent</em> &rarr; <em>security-reviewer</em></span>
+        </label>
+      </li>
+
+      <!-- PHASE 5: Dashboard -->
+      <li class="group-label">Phase 5 &middot; Web dashboard <span class="agent-tag">frontend-agent</span></li>
+
+      <li class="task" data-id="18">
+        <input type="checkbox" id="t18">
+        <label for="t18">Build the server-rendered dashboard shell (<code>GET /</code>) with three tabs: <strong>IA</strong> (one card per AI connector), <strong>Docker</strong> (container table), <strong>Projects</strong> (git table). Tab shell is connector-agnostic so new connectors render without shell edits.
+          <span class="ac"><strong>Done when:</strong> page renders all three tabs from a live snapshot; no external CDN deps. <em>frontend-agent</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="19">
+        <input type="checkbox" id="t19">
+        <label for="t19">Implement the Claude card UI: per-window bar (used vs limit), percent (or raw usage when no limit), and a live "resets in X" countdown rendered from <code>resets_at</code>. Sessions list with active/stale styling; scheduled-tasks list.
+          <span class="ac"><strong>Done when:</strong> card visually matches Claude's plan-usage widget shape; countdown ticks; "no data" state when connector unavailable. <em>frontend-agent</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="20">
+        <input type="checkbox" id="t20">
+        <label for="t20">Implement client-side polling: fetch <code>/api/snapshot</code> on the configured interval (~5s default), diff/update the DOM in place (no full reload), render clean "no data" states for unavailable connectors/tabs.
+          <span class="ac"><strong>Done when:</strong> dashboard updates without manual reload; stopping the poll source shows graceful empty states. <em>frontend-agent</em> &rarr; <em>code-reviewer</em></span>
+        </label>
+      </li>
+
+      <!-- PHASE 6: Packaging & verification -->
+      <li class="group-label">Phase 6 &middot; Packaging &amp; verification <span class="agent-tag">backend-agent / github-agent</span></li>
+
+      <li class="task" data-id="21">
+        <input type="checkbox" id="t21">
+        <label for="t21">Write the Dockerfile and <code>docker-compose.yml</code> per SPEC: port bound to <code>127.0.0.1:8000</code> only; mounts <code>~/.claude</code>, <code>~/.codex</code> as <code>:ro</code>, and <code>/var/run/docker.sock:...:ro</code>. The <code>:ro</code> on the socket is load-bearing &mdash; document why in a comment.
+          <span class="ac"><strong>Done when:</strong> <code>docker compose up</code> serves the dashboard; all mounts read-only. <em>backend-agent</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="22">
+        <input type="checkbox" id="t22">
+        <label for="t22">Add API + resilience test suite: <code>/api/snapshot</code> shape, <code>/api/projects/{name}</code> traversal rejection, <code>/api/docker</code> shape, <code>/healthz</code> availability reporting, and degradation (truncated JSONL, missing keys, absent mounts) increments counters not crashes.
+          <span class="ac"><strong>Done when:</strong> <code>pytest</code> full suite green. <em>backend-agent</em> &rarr; <em>test-reviewer</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="23">
+        <input type="checkbox" id="t23">
+        <label for="t23"><span class="badge risk">risk</span> Manual verification against real local mounts (read-only): eyeball that Claude window totals are in the same ballpark as Claude's own UI for a known session; confirm Docker + Projects tabs populate; confirm nothing is ever written.
+          <span class="ac"><strong>Done when:</strong> totals match within a small margin; read-only verified; results noted in LESSONS.md. <em>main-agent verifies</em></span>
+        </label>
+      </li>
+      <li class="task" data-id="24">
+        <input type="checkbox" id="t24">
+        <label for="t24">Final review pass: <em>code-simplifier</em> &rarr; <em>code-reviewer</em>; <em>architecture-reviewer</em> on the connector interface; <em>security-reviewer</em> on socket access + path handling + no-raw-transcript-leak. Apply accumulated suggestions, then commit via <em>github-agent</em>.
+          <span class="ac"><strong>Done when:</strong> reviews pass; success criteria re-checked end to end. <em>reviewers</em> &rarr; <em>github-agent</em></span>
+        </label>
+      </li>
+    </ul>
+  </section>
+
+  <section id="assumptions-section">
+    <h2>Assumptions</h2>
+    <ul class="assumptions-list" id="assumptions-list">
+      <li>v1 is single-operator, single-host, bound to localhost. No auth is acceptable only under that constraint.</li>
+      <li>Config is JSON (no DB), holding poll interval, cache TTL, source paths, timezone, and optional per-window plan limits.</li>
+      <li>Plan limits are operator-supplied config; when absent, the UI shows raw usage (<code>percent = null</code>) rather than guessing caps.</li>
+      <li>"Git project monitoring" (in the v1 ask but only mentioned in passing in the spec) is treated as a real connector/task; its exact metric set is confirmed in Task 15 before building.</li>
+      <li>Codex connector is a best-effort fast-follow and explicitly out of v1 scope; the framework leaves room for it but v1 doesn't gate on it.</li>
+      <li>Full re-scan of transcripts behind a short cache TTL is acceptable for tens of projects; incremental offset-tracking is a perf follow-up only if scan latency becomes visible.</li>
+      <li>Riskiest tasks: <strong>#7b</strong> (streaming dedup by <code>message.id</code> &mdash; getting this wrong inflates every token count), <strong>#13/#14</strong> (Docker socket access &mdash; the <code>:ro</code> guarantee and no-mutation invariant) and <strong>#8/#9</strong> (quota-window math matching Claude's real reset semantics).</li>
+      <li>Token correctness depends on matching how existing tools parse <code>~/.claude</code>: dedup partial records per <code>message.id</code>, drop zero-token turns, filter <code>isSidechain</code>, read <code>costUSD</code> directly, handle tiered cache fields. Confirmed in #7, enforced in #7b.</li>
+      <li><code>gitBranch</code> is read from the JSONL per session; the git connector (#16) is for the Projects tab only, avoiding a per-session <code>git</code> fan-out.</li>
+    </ul>
+  </section>
+
+  <section id="clarifications-section">
+    <h2>Open Questions (carry into execution)</h2>
+    <div class="clarifications" id="clarifications-list">
+      <div class="qa">
+        <div class="q">Q: Are Claude's per-plan window limits available locally, or operator-supplied?</div>
+        <div class="a">Resolve in Task 7. Blocks percent display only, not the rest. Default: operator config, fall back to raw usage.</div>
+      </div>
+      <div class="qa">
+        <div class="q">Q: Exact reset semantics (anchored 5-hour blocks vs calendar-aligned)?</div>
+        <div class="a">Confirm in Task 7. Until then, calendar-align weekly/monthly; treat 5-hour as best-known approximation.</div>
+      </div>
+      <div class="qa">
+        <div class="q">Q: Scheduled-task config file name/format for cadence?</div>
+        <div class="a">Confirm in Task 7. Until then, list tasks by name with <code>schedule = null</code>.</div>
+      </div>
+      <div class="qa">
+        <div class="q">Q: What exactly does git/project monitoring show?</div>
+        <div class="a">Confirm metric set with user in Task 15 (proposed: branch, dirty, ahead/behind, last commit, last activity).</div>
+      </div>
+      <div class="qa">
+        <div class="q">Q: Poll interval and cache TTL values?</div>
+        <div class="a">Start ~5s poll / short TTL; tune against real scan cost during Task 23.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="export-row">
+    <button class="export-btn" onclick="exportMarkdown()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Export to Markdown
+    </button>
+    <span class="export-hint" id="export-hint">Copies current state (checked tasks) to clipboard</span>
+  </div>
+
+  <script>
+    function updateProgress() {
+      const tasks = document.querySelectorAll('#task-list input[type=checkbox]');
+      const done = [...tasks].filter(t => t.checked).length;
+      const total = tasks.length;
+      const pct = total ? Math.round(done / total * 100) : 0;
+      document.getElementById('progress-text').textContent = `${done} / ${total} done`;
+      document.getElementById('progress-pct').textContent = `${pct}%`;
+      document.getElementById('progress-fill').style.width = pct + '%';
+      tasks.forEach(t => t.closest('.task').classList.toggle('done', t.checked));
+    }
+
+    document.getElementById('task-list').addEventListener('change', updateProgress);
+    updateProgress();
+
+    function exportMarkdown() {
+      const title   = document.getElementById('plan-title').textContent;
+      const summary = document.getElementById('plan-summary').textContent;
+
+      const tasks = [...document.querySelectorAll('#task-list .task')].map(t => {
+        const checked = t.querySelector('input[type=checkbox]').checked;
+        const label   = t.querySelector('label').childNodes[0].textContent.trim();
+        const ac      = t.querySelector('.ac');
+        const acText  = ac ? `\n  - ${ac.textContent.trim()}` : '';
+        return `- [${checked ? 'x' : ' '}] ${label}${acText}`;
+      }).join('\n');
+
+      const scopeIn  = [...document.querySelectorAll('#scope-in li')]
+        .map(li => `- ${li.textContent.trim()}`).join('\n');
+      const scopeOut = [...document.querySelectorAll('#scope-out li')]
+        .map(li => `- ${li.textContent.trim()}`).join('\n');
+      const success  = [...document.querySelectorAll('#success-list li')]
+        .map(li => `- ${li.textContent.trim()}`).join('\n');
+
+      const assumptionItems = [...document.querySelectorAll('#assumptions-list li')];
+      const assumptionsBlock = assumptionItems.length
+        ? `\n\n## Assumptions\n\n${assumptionItems.map(li => `- ${li.textContent.trim()}`).join('\n')}`
+        : '';
+
+      const md = [
+        `# Plan: ${title}`,
+        '',
+        summary,
+        '',
+        '## Scope',
+        '',
+        '**In:**',
+        scopeIn,
+        '',
+        '**Out:**',
+        scopeOut,
+        '',
+        '## Success Criteria',
+        '',
+        success,
+        '',
+        '## Action Items',
+        '',
+        tasks,
+        assumptionsBlock,
+      ].join('\n');
+
+      navigator.clipboard.writeText(md).then(() => {
+        const hint = document.getElementById('export-hint');
+        hint.textContent = 'Copied to clipboard!';
+        hint.classList.add('copied');
+        setTimeout(() => {
+          hint.textContent = 'Copies current state (checked tasks) to clipboard';
+          hint.classList.remove('copied');
+        }, 2500);
+      });
+    }
+  </script>
+</body>
+</html>

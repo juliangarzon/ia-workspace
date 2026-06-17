@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spec: AI Workspace Monitor</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2d3147;
+      --text: #e2e8f0;
+      --muted: #8892a4;
+      --accent: #6366f1;
+      --accent-dim: #4338ca22;
+      --green: #10b981;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+      /* layered-architecture diagram palette */
+      --l1: #6366f1;  /* presentation */
+      --l2: #0ea5e9;  /* api */
+      --l3: #14b8a6;  /* connector registry */
+      --l4: #10b981;  /* collectors */
+      --l5: #f59e0b;  /* data sources */
+      --l6: #a855f7;  /* config */
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mono: "JetBrains Mono", "Fira Code", monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.7;
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      min-height: 100vh;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 2rem 1rem;
+    }
+    nav .nav-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: var(--muted);
+      margin-bottom: 1rem;
+      padding: 0 .75rem;
+    }
+    nav a {
+      display: block;
+      padding: .3rem .75rem;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      border-radius: 4px;
+      border-left: 2px solid transparent;
+      transition: color .15s, background .15s;
+    }
+    nav a:hover, nav a.active {
+      color: var(--text);
+      border-left-color: var(--accent);
+      background: var(--accent-dim);
+    }
+    main { padding: 3rem 4rem; max-width: 900px; }
+    header { margin-bottom: 3rem; padding-bottom: 2rem; border-bottom: 1px solid var(--border); }
+    header .label { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); margin-bottom: .5rem; }
+    header h1 { font-size: 2rem; font-weight: 700; }
+    header .summary { color: var(--muted); margin-top: .75rem; }
+    header .meta { color: var(--muted); margin-top: 1rem; font-size: 13px; }
+    header .meta code { font-size: 12px; }
+    section { margin-bottom: 3rem; scroll-margin-top: 2rem; }
+    h2 { font-size: 1.1rem; font-weight: 600; color: var(--accent); margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 1rem; font-weight: 600; margin: 1.5rem 0 .75rem; }
+    p { margin-bottom: 1rem; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: .3rem; }
+    code { background: var(--surface); border: 1px solid var(--border); padding: .1em .4em; border-radius: 3px; font-family: var(--mono); font-size: .875em; }
+    pre { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.25rem; overflow-x: auto; margin-bottom: 1rem; }
+    pre code { background: none; border: none; padding: 0; }
+
+    .badge { display: inline-block; padding: .15em .55em; border-radius: 3px; font-size: 11px; font-weight: 600; margin-right: .4rem; vertical-align: middle; }
+    .badge.primary { background: #10b98122; color: var(--green); }
+    .badge.risk     { background: #ef444422; color: var(--red); }
+    .badge.open     { background: #f59e0b22; color: var(--yellow); }
+    .badge.phase    { background: #6366f122; color: var(--accent); }
+
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; font-size: 14px; }
+    th { background: var(--surface); text-align: left; padding: .6rem 1rem; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); border-bottom: 1px solid var(--border); }
+    td { padding: .6rem 1rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+
+    .open-questions { list-style: none; padding-left: 0; }
+    .open-questions li { padding: .6rem .75rem; margin-bottom: .4rem; background: var(--surface); border-radius: 4px; border-left: 3px solid var(--yellow); font-size: 14px; }
+
+    .decision { background: var(--surface); border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1rem; border-left: 3px solid var(--accent); }
+    .decision .q { font-size: 12px; color: var(--muted); margin-bottom: .4rem; }
+
+    .data-flow { display: flex; align-items: center; flex-wrap: wrap; margin: 1.5rem 0; padding: 1.5rem; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); }
+    .flow-node { background: var(--bg); border: 1px solid var(--accent); border-radius: 6px; padding: .5rem 1rem; font-size: 13px; font-weight: 500; white-space: nowrap; }
+    .flow-node.external { border-color: var(--muted); color: var(--muted); }
+    .flow-node.store { border-color: var(--green); border-style: dashed; }
+    .flow-arrow { display: flex; flex-direction: column; align-items: center; padding: 0 .5rem; color: var(--muted); }
+    .flow-arrow .arrow-label { font-size: 10px; color: var(--muted); white-space: nowrap; }
+
+    /* Sequence diagram */
+    .seq { margin: 1.5rem 0; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; overflow-x: auto; }
+    .seq svg { display: block; }
+    .seq text { font-family: var(--font); fill: var(--text); }
+    .seq .actor { fill: var(--bg); stroke: var(--accent); }
+    .seq .lifeline { stroke: var(--border); stroke-dasharray: 4 4; }
+    .seq .msg { stroke: var(--muted); }
+    .seq .msglbl { fill: var(--muted); font-size: 11px; }
+    .seq .actorlbl { fill: var(--text); font-size: 12px; font-weight: 600; }
+
+    /* Layered architecture diagram */
+    .layered { margin: 1.5rem 0; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; overflow-x: auto; }
+    .layered svg { display: block; width: 100%; height: auto; min-width: 760px; }
+    .layered text { font-family: var(--font); fill: var(--text); }
+    .layered .layer-label { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    .layered .layer-sub { font-size: 9px; fill: var(--muted); }
+    .layered .comp { font-size: 11px; fill: var(--text); }
+    .layered .comp-sub { font-size: 9px; fill: var(--muted); }
+    .layered .grouplbl { font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; fill: var(--muted); }
+    .layered .flowlbl { font-size: 9px; fill: var(--muted); }
+    .layered .legend { font-size: 10px; fill: var(--muted); }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="nav-label">Contents</div>
+    <a href="#background">Background</a>
+    <a href="#goals">Goals</a>
+    <a href="#non-goals">Non-Goals</a>
+    <a href="#design">Design</a>
+    <a href="#phases">Phases</a>
+    <a href="#open-decisions">Open Decisions</a>
+    <a href="#edge-cases">Edge Cases</a>
+    <a href="#security">Security</a>
+    <a href="#testing">Testing</a>
+    <a href="#success">Success Criteria</a>
+    <a href="#open-questions">Open Questions</a>
+    <a href="#decisions">Decisions Log</a>
+    <a href="#prior-art">Prior Art</a>
+  </nav>
+
+  <main>
+    <header>
+      <div class="label">Spec &middot; 0000-workspace-monitor</div>
+      <h1>AI Workspace Monitor</h1>
+      <p class="summary">A read-only web dashboard that watches local AI coding workspaces through pluggable <strong>connectors</strong> (Claude in v1), surfacing quota usage against the 5-hour / weekly / monthly limits, active sessions/agents, and scheduled tasks across tens of projects in one place. v1 also adds a <strong>Docker</strong> connector for read-only container monitoring (status, uptime, per-container CPU/memory, port mappings) in a dedicated "Docker" tab. Container <em>control</em> (start/stop/restart) is explicitly out of scope, consistent with the read-only v1 constraint.</p>
+      <p class="meta">Stack: <code>Python + FastAPI</code> &middot; Architecture: connector-per-provider &middot; Deploy: Docker with state files mounted read-only and <code>/var/run/docker.sock</code> mounted read-only &middot; Scope: observation only &mdash; no writes to workspaces, no container control</p>
+    </header>
+
+    <section id="background">
+      <h2>Background</h2>
+      <p>Julián runs many AI coding workspaces in parallel: Claude Code (desktop and CLI) and Codex, across tens of projects. Each tool writes its own state to the local filesystem (session files, transcripts, scheduled-task folders, a stats cache), but there is no single view that answers the questions that matter mid-day:</p>
+      <ul>
+        <li>How much of my 5-hour / weekly / monthly quota have I consumed, and when does each window reset?</li>
+        <li>Which sessions and agents are running right now, and in which projects?</li>
+        <li>What scheduled tasks exist and when do they fire?</li>
+      </ul>
+      <p>Today that means opening individual tools or grepping dotfiles by hand. The desired experience mirrors the plan-usage widget Claude already shows in its own UI &mdash; a percent-of-quota bar per window with a "resets in X" countdown &mdash; but aggregated across every workspace and presented in a browser.</p>
+      <p>The target widget Claude renders, which v1 reproduces, looks like:</p>
+      <ul>
+        <li><code>5-hour limit &middot; 19% &middot; resets 1h</code></li>
+        <li><code>Weekly &middot; all models &middot; 31% &middot; resets 1d</code></li>
+        <li><code>Sonnet only &middot; 11% &middot; resets 1d</code></li>
+        <li><code>Usage credits &middot; $0.00 of $90.00</code> (out of scope for v1 token tracking; see Non-Goals)</li>
+      </ul>
+      <p>The monitor is organized around <strong>connectors</strong>: one self-contained module per AI provider that knows its own data source, its metrics, and how to present them. v1 ships the Claude connector; Codex and others follow the same interface later. The service runs in Docker with the relevant state directories mounted as read-only volumes, so it never mutates the workspaces it observes.</p>
+    </section>
+
+    <section id="goals">
+      <h2>Goals</h2>
+      <ul>
+        <li><span class="badge primary">primary</span> Show quota usage per window &mdash; 5-hour, weekly, monthly &mdash; as <em>used vs. limit, percent consumed, and time-to-reset</em>, mirroring Claude's own plan-usage widget. This is the headline metric, not a rolling projection.</li>
+        <li><span class="badge primary">primary</span> Show active sessions and agents per project, derived from on-disk state files (Docker-friendly, no process inspection).</li>
+        <li><span class="badge primary">primary</span> Ship a Claude <strong>connector</strong> as the first provider, behind a common connector interface so Codex / OpenAI / others slot in later without touching the core.</li>
+        <li><span class="badge primary">primary</span> Ship a Docker <strong>connector</strong> (v1, read-only) that lists running containers with status, uptime, per-container CPU % and memory used/limit, and port mappings, surfaced in a dedicated "Docker" tab. Uses the same connector interface as the AI providers; reads the Docker socket mounted read-only.</li>
+        <li>List Claude scheduled tasks (one folder per routine) with their cadence.</li>
+        <li>Present everything in a single web dashboard (an "IA" tab with one card per AI connector, plus a "Docker" tab) that refreshes without manual reloads.</li>
+        <li>Stay strictly read-only: the monitor never writes to any observed workspace and never controls any container. Container start/stop/restart is explicitly out of scope &mdash; see Non-Goals and Security.</li>
+        <li>Scale comfortably to tens of projects (not hundreds) on a single host.</li>
+        <li>Aggregate Codex token usage on a <strong>best-effort</strong> basis once its connector lands: include it where the session files expose usage, degrade quietly where they don't.</li>
+      </ul>
+    </section>
+
+    <section id="non-goals">
+      <h2>Non-Goals</h2>
+      <ul>
+        <li>No push notifications, alerts, or webhooks in v1. Passive observation only; the user checks the dashboard.</li>
+        <li>No control actions: cannot start/stop sessions, kill agents, edit or trigger scheduled tasks, or start/stop/restart containers. The whole tool is read-only by design. <strong>Container start/stop/restart is explicitly out of scope for v1</strong> &mdash; the Docker connector observes only. (Write access would require dropping the <code>:ro</code> flag on the socket mount, which opens full daemon control; see Security and Decisions Log.)</li>
+        <li>No process inspection (e.g. <code>ps</code>, reading <code>/proc</code>). Privileged Docker access for PID-namespace inspection is out of scope; AI state files are the single source of truth. <strong>Exception:</strong> the Docker connector reads <code>/var/run/docker.sock</code> &mdash; the standard, supported way to query container state, distinct from PID-namespace access. Mounted read-only in v1.</li>
+        <li>No multi-user auth, accounts, or RBAC. Single-operator, single-host tool.</li>
+        <li>No historical data warehouse or long-term retention beyond what the source files already keep.</li>
+        <li>No cost/billing reconciliation against provider invoices. Token counts come from local transcripts only.</li>
+        <li>Not designed for hundreds of projects or a fleet of remote hosts.</li>
+      </ul>
+    </section>
+
+    <section id="design">
+      <h2>Design</h2>
+
+      <h3>Architecture</h3>
+      <p>A FastAPI service loads one <strong>connector</strong> per AI provider, asks each to read its own mounted state and produce a normalized contribution, merges them into an in-memory snapshot, and serves both a server-rendered dashboard and a JSON API. The browser polls the API on an interval. No database: the filesystem is the store, and derived metrics are computed on demand with a short in-process cache.</p>
+      <p>A <strong>connector</strong> is the top-level abstraction. Each one is self-contained: it owns its source paths, its metrics, and its display contract. The core knows only the connector interface, so adding a provider means adding a module under <code>connectors/</code> &mdash; nothing in the aggregator or API changes. v1 registers the Claude connector and the Docker connector; Codex and others register later. Internally a connector may use one or more <em>collectors</em> (one per source family) as an implementation detail; that is not the public abstraction.</p>
+      <p>The Docker connector is not an AI provider, but it implements the same <code>Collector</code> / connector interface: it reads its source (the Docker socket), normalizes the result into a snapshot contribution, and renders into its own dashboard tab. It surfaces in a dedicated <strong>"Docker"</strong> tab alongside the <strong>"IA"</strong> tab (one card per AI connector) and the git/projects tabs, rather than as a card inside "IA".</p>
+      <pre><code>connectors/
+  base.py     # Connector interface: id, sources, collect() -&gt; ConnectorSnapshot
+  claude.py   # v1: stats-cache + transcripts + sessions + scheduled-tasks
+  docker.py   # v1: read-only container monitoring via Docker SDK over the socket
+  codex.py    # later: best-effort token usage from ~/.codex/sessions
+  # openai.py, ... future</code></pre>
+      <p>The diagram below shows the six layers top to bottom. Data flows down on request (browser &rarr; API &rarr; connectors &rarr; collectors &rarr; sources) and back up as a merged snapshot. Every source is read-only; Config sits to the side and feeds the layers that need project paths and quota limits.</p>
+      <div class="layered">
+        <svg viewBox="0 0 820 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Layered architecture: Presentation, API, Connector Registry, Collectors, Data Sources, Config">
+          <defs>
+            <marker id="la-down" markerWidth="9" markerHeight="9" refX="4" refY="7" orient="auto">
+              <path d="M0 0l4 7 4-7z" fill="var(--muted)"/>
+            </marker>
+            <marker id="la-up" markerWidth="9" markerHeight="9" refX="4" refY="2" orient="auto">
+              <path d="M0 9l4-7 4 7z" fill="var(--muted)"/>
+            </marker>
+          </defs>
+
+          <!-- vertical data-flow spine labels (between bands, right gutter) -->
+          <line x1="700" y1="20" x2="700" y2="650" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 4"/>
+          <line x1="700" y1="30" x2="700" y2="640" stroke="var(--muted)" stroke-width="1" marker-end="url(#la-down)"/>
+          <line x1="715" y1="640" x2="715" y2="30" stroke="var(--muted)" stroke-width="1" marker-end="url(#la-up)"/>
+          <text class="flowlbl" x="694" y="335" text-anchor="end">request &darr;</text>
+          <text class="flowlbl" x="721" y="350" text-anchor="start">snapshot &uarr;</text>
+
+          <!-- ============ LAYER 1: PRESENTATION ============ -->
+          <rect x="20" y="20" width="660" height="96" rx="8" fill="var(--l1)" fill-opacity="0.07" stroke="var(--l1)" stroke-opacity="0.5"/>
+          <rect x="20" y="20" width="6" height="96" rx="3" fill="var(--l1)"/>
+          <text class="layer-label" x="36" y="40" fill="var(--l1)">Layer 1 &middot; Presentation</text>
+          <text class="layer-sub" x="36" y="53">Browser &mdash; Web Dashboard (HTML + JS)</text>
+          <rect x="36" y="62" width="150" height="44" rx="5" fill="var(--bg)" stroke="var(--l1)" stroke-opacity="0.6"/>
+          <text class="comp" x="46" y="80">"IA" tab</text>
+          <text class="comp-sub" x="46" y="95">card per AI provider</text>
+          <rect x="196" y="62" width="150" height="44" rx="5" fill="var(--bg)" stroke="var(--l1)" stroke-opacity="0.6"/>
+          <text class="comp" x="206" y="80">"Docker" tab</text>
+          <text class="comp-sub" x="206" y="95">status / CPU / mem / ports</text>
+          <rect x="356" y="62" width="150" height="44" rx="5" fill="var(--bg)" stroke="var(--l1)" stroke-opacity="0.6"/>
+          <text class="comp" x="366" y="80">"Projects" tab</text>
+          <text class="comp-sub" x="366" y="95">branch / dirty / ahead-behind</text>
+          <rect x="516" y="62" width="150" height="44" rx="5" fill="var(--bg)" stroke="var(--l1)" stroke-opacity="0.6"/>
+          <text class="comp" x="526" y="80">Polling loop</text>
+          <text class="comp-sub" x="526" y="95">client-side, ~5s</text>
+
+          <!-- arrow L1 -> L2 -->
+          <line x1="360" y1="116" x2="360" y2="134" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#la-down)"/>
+
+          <!-- ============ LAYER 2: API ============ -->
+          <rect x="20" y="136" width="660" height="96" rx="8" fill="var(--l2)" fill-opacity="0.07" stroke="var(--l2)" stroke-opacity="0.5"/>
+          <rect x="20" y="136" width="6" height="96" rx="3" fill="var(--l2)"/>
+          <text class="layer-label" x="36" y="156" fill="var(--l2)">Layer 2 &middot; API (FastAPI)</text>
+          <text class="layer-sub" x="36" y="169">HTTP endpoints + in-process snapshot assembly</text>
+          <rect x="36" y="178" width="118" height="44" rx="5" fill="var(--bg)" stroke="var(--l2)" stroke-opacity="0.6"/>
+          <text class="comp" x="46" y="196">GET /api/snapshot</text>
+          <text class="comp-sub" x="46" y="211">full dashboard data</text>
+          <rect x="164" y="178" width="110" height="44" rx="5" fill="var(--bg)" stroke="var(--l2)" stroke-opacity="0.6"/>
+          <text class="comp" x="174" y="196">GET /api/docker</text>
+          <text class="comp-sub" x="174" y="211">container list</text>
+          <rect x="284" y="178" width="96" height="44" rx="5" fill="var(--bg)" stroke="var(--l2)" stroke-opacity="0.6"/>
+          <text class="comp" x="294" y="196">GET /healthz</text>
+          <text class="comp-sub" x="294" y="211">liveness</text>
+          <rect x="390" y="178" width="130" height="44" rx="5" fill="var(--bg)" stroke="var(--l2)" stroke-opacity="0.6"/>
+          <text class="comp" x="400" y="196">Snapshot cache</text>
+          <text class="comp-sub" x="400" y="211">in-process, short TTL</text>
+          <rect x="530" y="178" width="136" height="44" rx="5" fill="var(--bg)" stroke="var(--l2)" stroke-opacity="0.6"/>
+          <text class="comp" x="540" y="196">Aggregator</text>
+          <text class="comp-sub" x="540" y="211">merges contributions</text>
+
+          <!-- arrow L2 -> L3 -->
+          <line x1="360" y1="232" x2="360" y2="250" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#la-down)"/>
+
+          <!-- ============ LAYER 3: CONNECTOR REGISTRY ============ -->
+          <rect x="20" y="252" width="660" height="96" rx="8" fill="var(--l3)" fill-opacity="0.07" stroke="var(--l3)" stroke-opacity="0.5"/>
+          <rect x="20" y="252" width="6" height="96" rx="3" fill="var(--l3)"/>
+          <text class="layer-label" x="36" y="272" fill="var(--l3)">Layer 3 &middot; Connector Registry</text>
+          <text class="layer-sub" x="36" y="285">one self-contained module per provider, shared interface</text>
+          <rect x="36" y="294" width="150" height="44" rx="5" fill="var(--bg)" stroke="var(--l3)" stroke-opacity="0.6"/>
+          <text class="comp" x="46" y="312">connectors/base.py</text>
+          <text class="comp-sub" x="46" y="327">id, sources, collect()</text>
+          <rect x="196" y="294" width="150" height="44" rx="5" fill="var(--bg)" stroke="var(--l3)" stroke-opacity="0.6"/>
+          <text class="comp" x="206" y="312">connectors/claude.py</text>
+          <text class="comp-sub" x="206" y="327">v1</text>
+          <rect x="356" y="294" width="150" height="44" rx="5" fill="var(--bg)" stroke="var(--l3)" stroke-opacity="0.6"/>
+          <text class="comp" x="366" y="312">connectors/docker.py</text>
+          <text class="comp-sub" x="366" y="327">v1</text>
+          <rect x="516" y="294" width="150" height="44" rx="5" fill="var(--bg)" stroke="var(--l3)" stroke-opacity="0.4" stroke-dasharray="4 3"/>
+          <text class="comp" x="526" y="312" fill="var(--muted)">connectors/codex.py</text>
+          <text class="comp-sub" x="526" y="327">later, best-effort</text>
+
+          <!-- arrow L3 -> L4 -->
+          <line x1="360" y1="348" x2="360" y2="366" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#la-down)"/>
+
+          <!-- ============ LAYER 4: COLLECTORS ============ -->
+          <rect x="20" y="368" width="660" height="150" rx="8" fill="var(--l4)" fill-opacity="0.07" stroke="var(--l4)" stroke-opacity="0.5"/>
+          <rect x="20" y="368" width="6" height="150" rx="3" fill="var(--l4)"/>
+          <text class="layer-label" x="36" y="388" fill="var(--l4)">Layer 4 &middot; Collectors</text>
+          <text class="layer-sub" x="36" y="401">per-connector internals (not the public abstraction)</text>
+
+          <!-- Claude collectors group -->
+          <rect x="36" y="410" width="380" height="96" rx="6" fill="none" stroke="var(--l4)" stroke-opacity="0.3" stroke-dasharray="3 3"/>
+          <text class="grouplbl" x="44" y="423">inside Claude connector</text>
+          <rect x="44" y="430" width="86" height="32" rx="4" fill="var(--bg)" stroke="var(--l4)" stroke-opacity="0.6"/>
+          <text class="comp" x="52" y="445">StatsCollector</text>
+          <text class="comp-sub" x="52" y="457">quota windows</text>
+          <rect x="138" y="430" width="100" height="32" rx="4" fill="var(--bg)" stroke="var(--l4)" stroke-opacity="0.6"/>
+          <text class="comp" x="146" y="445">TranscriptColl.</text>
+          <text class="comp-sub" x="146" y="457">token granularity</text>
+          <rect x="246" y="430" width="92" height="32" rx="4" fill="var(--bg)" stroke="var(--l4)" stroke-opacity="0.6"/>
+          <text class="comp" x="254" y="445">SessionColl.</text>
+          <text class="comp-sub" x="254" y="457">active sessions</text>
+          <rect x="44" y="468" width="86" height="32" rx="4" fill="var(--bg)" stroke="var(--l4)" stroke-opacity="0.6"/>
+          <text class="comp" x="52" y="483">TaskCollector</text>
+          <text class="comp-sub" x="52" y="495">routines</text>
+
+          <!-- Docker collector group -->
+          <rect x="426" y="410" width="118" height="96" rx="6" fill="none" stroke="var(--l4)" stroke-opacity="0.3" stroke-dasharray="3 3"/>
+          <text class="grouplbl" x="434" y="423">Docker connector</text>
+          <rect x="434" y="430" width="102" height="44" rx="4" fill="var(--bg)" stroke="var(--l4)" stroke-opacity="0.6"/>
+          <text class="comp" x="442" y="448">DockerSDKColl.</text>
+          <text class="comp-sub" x="442" y="463">SDK over socket</text>
+
+          <!-- Git collector group -->
+          <rect x="554" y="410" width="112" height="96" rx="6" fill="none" stroke="var(--l4)" stroke-opacity="0.3" stroke-dasharray="3 3"/>
+          <text class="grouplbl" x="562" y="423">Projects tab</text>
+          <rect x="562" y="430" width="96" height="44" rx="4" fill="var(--bg)" stroke="var(--l4)" stroke-opacity="0.6"/>
+          <text class="comp" x="570" y="448">GitCollector</text>
+          <text class="comp-sub" x="570" y="463">git per project</text>
+
+          <!-- arrow L4 -> L5 -->
+          <line x1="360" y1="518" x2="360" y2="536" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#la-down)"/>
+
+          <!-- ============ LAYER 5: DATA SOURCES ============ -->
+          <rect x="20" y="538" width="660" height="112" rx="8" fill="var(--l5)" fill-opacity="0.07" stroke="var(--l5)" stroke-opacity="0.5"/>
+          <rect x="20" y="538" width="6" height="112" rx="3" fill="var(--l5)"/>
+          <text class="layer-label" x="36" y="558" fill="var(--l5)">Layer 5 &middot; Data Sources</text>
+          <text class="layer-sub" x="36" y="571">filesystem / socket &mdash; all read-only</text>
+          <rect x="36" y="580" width="200" height="28" rx="4" fill="var(--bg)" stroke="var(--l5)" stroke-opacity="0.6" stroke-dasharray="4 3"/>
+          <text class="comp" x="44" y="598">~/.claude/stats-cache.json</text>
+          <rect x="244" y="580" width="200" height="28" rx="4" fill="var(--bg)" stroke="var(--l5)" stroke-opacity="0.6" stroke-dasharray="4 3"/>
+          <text class="comp" x="252" y="598">~/.claude/projects/**/*.jsonl</text>
+          <rect x="452" y="580" width="214" height="28" rx="4" fill="var(--bg)" stroke="var(--l5)" stroke-opacity="0.6" stroke-dasharray="4 3"/>
+          <text class="comp" x="460" y="598">~/.claude/sessions/*.json</text>
+          <rect x="36" y="614" width="148" height="28" rx="4" fill="var(--bg)" stroke="var(--l5)" stroke-opacity="0.6" stroke-dasharray="4 3"/>
+          <text class="comp" x="44" y="632">~/.claude/scheduled-tasks/</text>
+          <rect x="192" y="614" width="130" height="28" rx="4" fill="var(--bg)" stroke="var(--l5)" stroke-opacity="0.6" stroke-dasharray="4 3"/>
+          <text class="comp" x="200" y="632">~/.codex/sessions/</text>
+          <rect x="330" y="614" width="174" height="28" rx="4" fill="var(--bg)" stroke="var(--l5)" stroke-opacity="0.6" stroke-dasharray="4 3"/>
+          <text class="comp" x="338" y="632">/var/run/docker.sock (ro)</text>
+          <rect x="512" y="614" width="154" height="28" rx="4" fill="var(--bg)" stroke="var(--l5)" stroke-opacity="0.6" stroke-dasharray="4 3"/>
+          <text class="comp" x="520" y="632">project dirs (git repos)</text>
+
+          <!-- ============ LAYER 6: CONFIG (side) ============ -->
+          <rect x="20" y="672" width="660" height="68" rx="8" fill="var(--l6)" fill-opacity="0.07" stroke="var(--l6)" stroke-opacity="0.5"/>
+          <rect x="20" y="672" width="6" height="68" rx="3" fill="var(--l6)"/>
+          <text class="layer-label" x="36" y="692" fill="var(--l6)">Layer 6 &middot; Config</text>
+          <rect x="36" y="700" width="180" height="32" rx="5" fill="var(--bg)" stroke="var(--l6)" stroke-opacity="0.6"/>
+          <text class="comp" x="46" y="715">config.json</text>
+          <text class="comp-sub" x="46" y="728">project paths, settings, limits</text>
+          <text class="legend" x="232" y="713">Feeds connectors (project paths), collectors (which sources),</text>
+          <text class="legend" x="232" y="726">and the quota math (window limits). Hardcoded or user-defined.</text>
+          <!-- config feed arrow up the left side -->
+          <path d="M30 700 L30 410" fill="none" stroke="var(--l6)" stroke-opacity="0.45" stroke-width="1" stroke-dasharray="3 4" marker-end="url(#la-up)"/>
+        </svg>
+      </div>
+
+      <h3>Data Flow</h3>
+      <p>Each connector reads its own source(s), normalizes them, and returns a per-provider contribution (quota windows + sessions + tasks). The aggregator merges contributions across connectors and assembles a single snapshot the API serves.</p>
+      <div class="data-flow">
+        <div class="flow-node store">State files (RO)</div>
+        <div class="flow-arrow">
+          <svg width="24" height="12" viewBox="0 0 24 12"><path d="M0 6h20M16 2l6 4-6 4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+          <span class="arrow-label">parse</span>
+        </div>
+        <div class="flow-node">Connectors</div>
+        <div class="flow-arrow">
+          <svg width="24" height="12" viewBox="0 0 24 12"><path d="M0 6h20M16 2l6 4-6 4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+          <span class="arrow-label">normalize</span>
+        </div>
+        <div class="flow-node">Aggregator</div>
+        <div class="flow-arrow">
+          <svg width="24" height="12" viewBox="0 0 24 12"><path d="M0 6h20M16 2l6 4-6 4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+          <span class="arrow-label">cache</span>
+        </div>
+        <div class="flow-node">Snapshot</div>
+        <div class="flow-arrow">
+          <svg width="24" height="12" viewBox="0 0 24 12"><path d="M0 6h20M16 2l6 4-6 4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+          <span class="arrow-label">JSON</span>
+        </div>
+        <div class="flow-node accent">Dashboard</div>
+      </div>
+
+      <h3>Critical Flow — Dashboard Refresh (sequence)</h3>
+      <p>The happy path from a browser poll to rendered metrics. The snapshot cache absorbs repeated polls so the filesystem is not re-walked on every request.</p>
+      <div class="seq">
+        <svg width="720" height="300" viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg">
+          <!-- actors -->
+          <rect class="actor" x="20"  y="14" width="120" height="34" rx="5"/>
+          <text class="actorlbl" x="80"  y="36" text-anchor="middle">Browser</text>
+          <rect class="actor" x="200" y="14" width="120" height="34" rx="5"/>
+          <text class="actorlbl" x="260" y="36" text-anchor="middle">FastAPI</text>
+          <rect class="actor" x="380" y="14" width="120" height="34" rx="5"/>
+          <text class="actorlbl" x="440" y="36" text-anchor="middle">Snapshot cache</text>
+          <rect class="actor" x="560" y="14" width="140" height="34" rx="5"/>
+          <text class="actorlbl" x="630" y="36" text-anchor="middle">Connectors + FS</text>
+          <!-- lifelines -->
+          <line class="lifeline" x1="80"  y1="48" x2="80"  y2="290"/>
+          <line class="lifeline" x1="260" y1="48" x2="260" y2="290"/>
+          <line class="lifeline" x1="440" y1="48" x2="440" y2="290"/>
+          <line class="lifeline" x1="630" y1="48" x2="630" y2="290"/>
+          <defs>
+            <marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0 0l6 3-6 3z" fill="#8892a4"/>
+            </marker>
+          </defs>
+          <!-- 1 poll -->
+          <line class="msg" x1="80"  y1="78"  x2="258" y2="78"  marker-end="url(#ah)"/>
+          <text class="msglbl" x="90"  y="72">GET /api/snapshot (poll, every ~5s)</text>
+          <!-- 2 cache check -->
+          <line class="msg" x1="260" y1="108" x2="438" y2="108" marker-end="url(#ah)"/>
+          <text class="msglbl" x="270" y="102">get(snapshot)</text>
+          <!-- 3 miss -> collectors -->
+          <line class="msg" x1="440" y1="138" x2="628" y2="138" marker-end="url(#ah)"/>
+          <text class="msglbl" x="450" y="132">on miss / TTL expired: collect()</text>
+          <!-- 4 read files -->
+          <line class="msg" x1="628" y1="168" x2="442" y2="168" marker-end="url(#ah)"/>
+          <text class="msglbl" x="450" y="162">per-connector contributions (RO read)</text>
+          <!-- 5 fresh snapshot -->
+          <line class="msg" x1="438" y1="198" x2="262" y2="198" marker-end="url(#ah)"/>
+          <text class="msglbl" x="280" y="192">merged snapshot (cached, TTL)</text>
+          <!-- 6 response -->
+          <line class="msg" x1="258" y1="228" x2="82"  y2="228" marker-end="url(#ah)"/>
+          <text class="msglbl" x="95"  y="222">200 JSON: quota windows, sessions, tasks</text>
+          <!-- 7 render -->
+          <line class="msg" x1="80"  y1="262" x2="80"  y2="262"/>
+          <text class="msglbl" x="40"  y="262">render / diff DOM</text>
+        </svg>
+      </div>
+
+      <h3>Quota &amp; Token Tracking Approach</h3>
+      <p>The dashboard reproduces Claude's plan-usage widget: for each window it shows <em>used vs. limit, percent consumed, and a "resets in X" countdown</em>. It is a quota gauge, not a sliding projection. Two sources feed it:</p>
+      <ul>
+        <li><strong><code>stats-cache.json</code></strong> &mdash; cheap per-day activity rollups (message/session/tool counts). Drives the coarse window usage and is the fast path.</li>
+        <li><strong>Transcript JSONL</strong> &mdash; each assistant turn carries a <code>usage</code> object, giving finer-grained token counts and per-turn timestamps for sub-day windows (the 5-hour bucket especially).</li>
+      </ul>
+      <p>For each of the three fixed windows &mdash; <strong>5-hour</strong>, <strong>weekly</strong>, <strong>monthly</strong> &mdash; the Claude connector computes:</p>
+      <ul>
+        <li><strong>used:</strong> token (or message) consumption attributed to the current window, bucketed by turn/day timestamp.</li>
+        <li><strong>limit:</strong> the window cap, <em>if known</em>. Claude's real per-plan caps may not be exposed locally &mdash; see Open Decisions for the hardcode-vs-relative call.</li>
+        <li><strong>percent:</strong> <code>used / limit</code> when a limit exists; null (show raw usage only) when it does not.</li>
+        <li><strong>resets_at:</strong> the next window boundary, rendered as a "resets in X" countdown.</li>
+      </ul>
+      <p>Token types captured from Claude transcripts: <code>input_tokens</code>, <code>output_tokens</code>, <code>cache_creation_input_tokens</code>, <code>cache_read_input_tokens</code>. These are summed and also exposed broken out, since cache reads are priced differently and matter for the usage math.</p>
+
+      <h4>Streaming dedup via <code>message.id</code> (required)</h4>
+      <p><span class="badge risk">critical</span> Claude Code writes <strong>multiple partial JSONL records per API call</strong> — one per streaming chunk. Only the <em>last</em> record for a given <code>message.id</code> carries the final, authoritative token counts; the earlier partials carry intermediate counts. Naively summing every record <strong>massively inflates</strong> token totals. The parser must therefore:</p>
+      <ul>
+        <li>Track seen <code>message.id</code> values and keep only the <strong>last</strong> record per id (later records supersede earlier ones).</li>
+        <li>Drop turns where all four token counts (<code>input</code>, <code>output</code>, <code>cache_creation</code>, <code>cache_read</code>) sum to zero — these are non-usage or pre-stream records.</li>
+      </ul>
+
+      <h4>Cost: read <code>costUSD</code> directly</h4>
+      <p>Claude Code writes <code>costUSD</code> directly onto each transcript record, so cost does <strong>not</strong> need to be computed from a pricing table. The connector reads <code>costUSD</code> as-is. A static pricing table is kept only as a <strong>fallback</strong> for older sessions whose records predate the <code>costUSD</code> field. (Dollar-cost surfacing in the UI remains deferred — see Non-Goals — but the field is parsed so it's available when that lands.)</p>
+
+      <h4>Filter background work: <code>isSidechain</code></h4>
+      <p>Claude Code marks background and tool-spawned calls with <code>isSidechain: true</code>. These are <em>not</em> top-level user sessions and counting them as such inflates quota usage and the session list. The connector filters out (or tags separately) records and sessions where <code>isSidechain</code> is true when computing quota usage; they are never presented as standalone top-level sessions.</p>
+
+      <h4>Cache tiering (newer API shape)</h4>
+      <p>Newer Claude API responses split cache-creation tokens into tiers under <code>message.usage.cache_creation</code>:</p>
+      <ul>
+        <li><code>message.usage.cache_creation.ephemeral_5m_input_tokens</code></li>
+        <li><code>message.usage.cache_creation.ephemeral_1h_input_tokens</code></li>
+      </ul>
+      <p>These coexist with the flat <code>cache_creation_input_tokens</code>. The parser handles <strong>both shapes</strong>: prefer the flat field when present, else sum the tiered sub-fields.</p>
+
+      <h4>Performance: prefilter before <code>json.loads()</code></h4>
+      <p>Before parsing a transcript line, cheaply test <code>b'"usage":' in line</code> and skip lines that fail it. The majority of JSONL lines carry no usage object, so this avoids the JSON-decode cost on the common case.</p>
+
+      <p><strong>Codex (best-effort, later connector):</strong> same shape against <code>~/.codex/sessions/**/*.jsonl</code>. Codex session files are JSONL with a leading <code>session_meta</code> record (cwd, model_provider, cli_version) followed by turn records that <em>may</em> carry token usage. Where usage is present it is aggregated; where the format omits it, the Codex connector contributes sessions/metadata only and reports its token data as unavailable rather than guessing.</p>
+      <p>Codex field names vary across versions; the connector parses defensively using these aliases (first present wins):</p>
+      <table>
+        <thead><tr><th>Concept</th><th>Accepted field names</th></tr></thead>
+        <tbody>
+          <tr><td>Input tokens</td><td><code>input_tokens</code> | <code>prompt_tokens</code> | <code>input</code></td></tr>
+          <tr><td>Output tokens</td><td><code>output_tokens</code> | <code>completion_tokens</code> | <code>output</code></td></tr>
+          <tr><td>Cached tokens</td><td><code>cached_input_tokens</code> | <code>cache_read_input_tokens</code> | <code>cached_tokens</code></td></tr>
+          <tr><td>Timestamp</td><td><code>timestamp</code> | <code>created_at</code> | <code>createdAt</code> (ISO string or unix ms)</td></tr>
+          <tr><td>Model</td><td><code>model</code> | <code>model_name</code> | nested <code>payload.info.model</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3>Session &amp; Agent Detection (state files only)</h3>
+      <p>Confirmed approach: read on-disk state, never inspect processes. This is the only option that works cleanly inside Docker with read-only mounts and no privileged access.</p>
+      <ul>
+        <li>Claude sessions live at <code>~/.claude/sessions/&lt;pid&gt;.json</code>, one file per session, each carrying <code>pid</code>, <code>sessionId</code>, <code>cwd</code>, <code>startedAt</code>, <code>kind</code> (e.g. <code>interactive</code>), <code>entrypoint</code> (e.g. <code>claude-desktop</code>), and <code>version</code>.</li>
+        <li><strong>Activity is derived from time since the last event</strong> (the latest turn timestamp / <code>lastEventAt</code> in the transcript JSONL for that session), not from process inspection. This is the approach proven by claude-code-dashboard. Three states, all thresholds <strong>configurable</strong>:
+          <ul>
+            <li><code>thinking</code> — last event <strong>&lt; 15s</strong> ago (thinking / waiting on the model).</li>
+            <li><code>active</code> — last event <strong>&lt; 60s</strong> ago.</li>
+            <li><code>idle</code> / <code>stale</code> — last event <strong>&gt; 60s</strong> ago; treated as inactive, since the file may be orphaned (see Edge Cases).</li>
+          </ul>
+        </li>
+        <li>Records flagged <code>isSidechain: true</code> are excluded from the top-level session list (background/tool calls, not user sessions).</li>
+        <li>Project attribution comes from <code>cwd</code> on each session, matched against the transcript project folders.</li>
+      </ul>
+
+      <h3>Docker Monitoring (read-only, v1)</h3>
+      <p>The Docker connector lists the host's containers and their live resource usage, read-only. It uses the <strong>Docker SDK for Python</strong> (the <code>docker</code> package) talking to the daemon over the Unix socket. The socket is mounted into the workspace-monitor container <strong>read-only</strong>:</p>
+      <pre><code>-v /var/run/docker.sock:/var/run/docker.sock:ro</code></pre>
+      <p>This is the standard pattern for monitoring Docker from inside a container. It is distinct from PID-namespace inspection (which the rest of the spec rules out): the socket is the daemon's own supported query interface, and the <code>:ro</code> flag keeps it observe-only. Per container the connector surfaces:</p>
+      <ul>
+        <li><strong>Identity &amp; state:</strong> name, image, status (running / stopped / paused / exited), and uptime.</li>
+        <li><strong>Resource usage:</strong> CPU percent and memory used vs. limit, from the daemon's stats stream (a single non-streaming sample per refresh).</li>
+        <li><strong>Port mappings:</strong> host port &rarr; container port, with protocol.</li>
+      </ul>
+      <p><strong>Out of scope for v1:</strong> any container control (start / stop / restart). The connector never issues a mutating call, and the read-only socket mount makes that a structural guarantee, not just a code convention.</p>
+
+      <h3>Git Monitoring (Projects tab vs. per-session branch)</h3>
+      <p>Branch information comes from two distinct places, and conflating them is wasteful:</p>
+      <ul>
+        <li><strong>Per-session branch (AI tab):</strong> Claude Code writes <code>gitBranch</code> onto every transcript record. The branch a session is running on is read <strong>directly from the JSONL</strong> (<code>Session.git_branch</code>) — <em>no <code>git</code> subprocess per session</em>. This is cheap and always reflects the branch at the time of the turn.</li>
+        <li><strong>Repo state (Projects tab):</strong> the git connector still runs <code>git</code> read-only against each configured project to show the <em>current</em> repo state — branch, dirty/clean, ahead/behind, last commit — across all configured repos, including those with no active AI session.</li>
+      </ul>
+      <p>So the git connector exists for the Projects tab; the AI tab does not need it for branch-per-session. This keeps the per-poll cost down (no fan-out of <code>git</code> calls for every session).</p>
+
+      <h3>Data Model — Snapshot (API response shape)</h3>
+      <table>
+        <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>generated_at</code></td><td><code>datetime</code></td><td>When this snapshot was built.</td></tr>
+          <tr><td><code>connectors[]</code></td><td><code>Connector[]</code></td><td>One entry per registered provider (Claude in v1). Each carries its own quota windows, sessions, and availability.</td></tr>
+          <tr><td><code>projects[]</code></td><td><code>Project[]</code></td><td>One entry per discovered workspace.</td></tr>
+          <tr><td><code>sessions[]</code></td><td><code>Session[]</code></td><td>All known sessions across connectors.</td></tr>
+          <tr><td><code>scheduled_tasks[]</code></td><td><code>ScheduledTask[]</code></td><td>Claude routines.</td></tr>
+          <tr><td><code>docker_containers[]</code></td><td><code>DockerContainer[]</code></td><td>Containers reported by the Docker connector (empty when the socket isn't mounted).</td></tr>
+          <tr><td><code>totals</code></td><td><code>TokenWindows</code></td><td>Aggregate quota windows across all connectors.</td></tr>
+        </tbody>
+      </table>
+
+      <h4>Connector</h4>
+      <table>
+        <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td><code>str</code></td><td>Provider id, e.g. <code>claude</code>, <code>codex</code>.</td></tr>
+          <tr><td><code>label</code></td><td><code>str</code></td><td>Display name for the connector card in the "IA" tab.</td></tr>
+          <tr><td><code>available</code></td><td><code>bool</code></td><td>False when the connector's source(s) aren't mounted/present; the card renders a "no data" state instead of zeros.</td></tr>
+          <tr><td><code>windows</code></td><td><code>TokenWindows</code></td><td>This provider's quota windows.</td></tr>
+          <tr><td><code>token_data</code></td><td><code>"full" | "best_effort" | "unavailable"</code></td><td>Confidence in token counts. Claude is <code>full</code>; Codex is <code>best_effort</code> and may be <code>unavailable</code> per file.</td></tr>
+        </tbody>
+      </table>
+
+      <h4>TokenWindows</h4>
+      <p>The three fixed quota windows shown in the widget, plus a lifetime total for context. Each window is a <code>QuotaWindow</code>, not a raw rolling sum.</p>
+      <table>
+        <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>current</code></td><td><code>TokenBreakdown</code></td><td>All-time / lifetime sum, for context (no quota attached).</td></tr>
+          <tr><td><code>five_hour</code></td><td><code>QuotaWindow</code></td><td>The 5-hour limit window.</td></tr>
+          <tr><td><code>weekly</code></td><td><code>QuotaWindow</code></td><td>The weekly limit window.</td></tr>
+          <tr><td><code>monthly</code></td><td><code>QuotaWindow</code></td><td>The monthly limit window.</td></tr>
+        </tbody>
+      </table>
+
+      <h4>QuotaWindow</h4>
+      <p>Mirrors one row of Claude's plan-usage widget (e.g. <code>5-hour limit &middot; 19% &middot; resets 1h</code>).</p>
+      <table>
+        <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>used</code></td><td><code>TokenBreakdown</code></td><td>Consumption attributed to this window.</td></tr>
+          <tr><td><code>limit</code></td><td><code>int | null</code></td><td>Window cap if known; null when not locally exposed (see Open Decisions).</td></tr>
+          <tr><td><code>percent</code></td><td><code>float | null</code></td><td><code>used.total / limit</code>; null when <code>limit</code> is null.</td></tr>
+          <tr><td><code>resets_at</code></td><td><code>datetime</code></td><td>Next window boundary; the UI renders the "resets in X" countdown from this.</td></tr>
+        </tbody>
+      </table>
+
+      <h4>TokenBreakdown</h4>
+      <table>
+        <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>input</code></td><td><code>int</code></td><td>Sum of <code>input_tokens</code>.</td></tr>
+          <tr><td><code>output</code></td><td><code>int</code></td><td>Sum of <code>output_tokens</code>.</td></tr>
+          <tr><td><code>cache_creation</code></td><td><code>int</code></td><td>Sum of <code>cache_creation_input_tokens</code>.</td></tr>
+          <tr><td><code>cache_read</code></td><td><code>int</code></td><td>Sum of <code>cache_read_input_tokens</code>.</td></tr>
+          <tr><td><code>total</code></td><td><code>int</code></td><td>Convenience sum of the four above.</td></tr>
+        </tbody>
+      </table>
+
+      <h4>Session</h4>
+      <table>
+        <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>tool</code></td><td><code>"claude" | "codex"</code></td><td>Source tool.</td></tr>
+          <tr><td><code>session_id</code></td><td><code>str</code></td><td>From the state file.</td></tr>
+          <tr><td><code>pid</code></td><td><code>int | null</code></td><td>Claude only; filename-derived.</td></tr>
+          <tr><td><code>cwd</code></td><td><code>str</code></td><td>Project working directory.</td></tr>
+          <tr><td><code>started_at</code></td><td><code>datetime</code></td><td>Session start.</td></tr>
+          <tr><td><code>entrypoint</code></td><td><code>str | null</code></td><td>e.g. <code>claude-desktop</code>, Codex source.</td></tr>
+          <tr><td><code>last_event_at</code></td><td><code>datetime | null</code></td><td>Timestamp of the latest turn for this session; drives <code>activity_state</code>.</td></tr>
+          <tr><td><code>activity_state</code></td><td><code>"thinking" | "active" | "idle" | "stale"</code></td><td>Derived from time since <code>last_event_at</code> (&lt;15s thinking, &lt;60s active, &gt;60s idle/stale). Thresholds configurable.</td></tr>
+          <tr><td><code>is_sidechain</code></td><td><code>bool</code></td><td>True for background/tool-spawned calls (<code>isSidechain</code> in the JSONL). Filtered from top-level listing and quota counting.</td></tr>
+          <tr><td><code>git_branch</code></td><td><code>str | null</code></td><td>Branch this session ran on, read from <code>gitBranch</code> in the transcript record — no git command needed.</td></tr>
+          <tr><td><code>status</code></td><td><code>"active" | "stale"</code></td><td>Coarse rollup of <code>activity_state</code> for back-compat (thinking/active &rarr; active; idle/stale &rarr; stale).</td></tr>
+        </tbody>
+      </table>
+
+      <h4>ScheduledTask</h4>
+      <table>
+        <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>name</code></td><td><code>str</code></td><td>Folder name under <code>scheduled-tasks/</code> (e.g. <code>navi-digest</code>).</td></tr>
+          <tr><td><code>schedule</code></td><td><code>str | null</code></td><td>Cron/cadence parsed from the routine's config, if present.</td></tr>
+          <tr><td><code>next_run</code></td><td><code>datetime | null</code></td><td>Computed from <code>schedule</code> when parseable.</td></tr>
+        </tbody>
+      </table>
+
+      <h4>DockerContainer</h4>
+      <p>One row of the "Docker" tab. Read-only; no control fields.</p>
+      <table>
+        <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td><code>str</code></td><td>Short container ID.</td></tr>
+          <tr><td><code>name</code></td><td><code>str</code></td><td>Container name.</td></tr>
+          <tr><td><code>image</code></td><td><code>str</code></td><td>Image reference.</td></tr>
+          <tr><td><code>status</code></td><td><code>"running" | "stopped" | "paused" | "exited"</code></td><td>Container state.</td></tr>
+          <tr><td><code>uptime_seconds</code></td><td><code>int</code></td><td>Seconds since the container started.</td></tr>
+          <tr><td><code>cpu_percent</code></td><td><code>float</code></td><td>CPU usage percent from the latest stats sample.</td></tr>
+          <tr><td><code>memory_used_mb</code></td><td><code>float</code></td><td>Memory currently used, in MB.</td></tr>
+          <tr><td><code>memory_limit_mb</code></td><td><code>float | null</code></td><td>Memory limit in MB; null when unbounded.</td></tr>
+          <tr><td><code>ports[]</code></td><td><code>{host: int, container: int, protocol: "tcp" | "udp"}[]</code></td><td>Published port mappings.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>API</h3>
+      <table>
+        <thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>GET</code></td><td><code>/</code></td><td>Server-rendered dashboard page.</td></tr>
+          <tr><td><code>GET</code></td><td><code>/api/snapshot</code></td><td>Full snapshot (totals, projects, sessions, tasks). Primary poll endpoint.</td></tr>
+          <tr><td><code>GET</code></td><td><code>/api/projects/{name}</code></td><td>Per-project drill-down (tokens by window, its sessions).</td></tr>
+          <tr><td><code>GET</code></td><td><code>/api/docker</code></td><td>Container list with status, CPU/memory, and ports. Backs the "Docker" tab.</td></tr>
+          <tr><td><code>GET</code></td><td><code>/healthz</code></td><td>Liveness for Docker.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Deployment — docker-compose</h3>
+      <p>The state directories and the Docker socket are mounted <strong>read-only</strong>. The <code>:ro</code> suffix on the socket is load-bearing: it is what keeps the Docker connector observe-only (see Security).</p>
+      <pre><code>services:
+  workspace-monitor:
+    image: workspace-monitor:latest
+    ports:
+      - "127.0.0.1:8000:8000"   # localhost-only; no public exposure
+    volumes:
+      - ~/.claude:/state/claude:ro
+      - ~/.codex:/state/codex:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro   # read-only daemon access</code></pre>
+    </section>
+
+    <section id="phases">
+      <h2>Phases</h2>
+      <h3>Phase 1 (ships)</h3>
+      <ul>
+        <li><span class="badge phase">v1</span> Connector framework: a registry + common interface; the core depends only on the interface.</li>
+        <li><span class="badge phase">v1</span> Claude connector: quota windows (5h / weekly / monthly) with used, percent, resets_at, sourced from <code>stats-cache.json</code> + transcripts.</li>
+        <li><span class="badge phase">v1</span> Sessions/agents list from state files with active/stale status.</li>
+        <li><span class="badge phase">v1</span> Scheduled tasks list.</li>
+        <li><span class="badge phase">v1</span> "IA" tab dashboard, one card per connector (just Claude in v1), client-side polling, snapshot cache.</li>
+        <li><span class="badge phase">v1</span> Docker connector (read-only): list containers with status, uptime, CPU/memory, and ports via the Docker SDK over the <code>:ro</code> socket mount, surfaced in a dedicated "Docker" tab. No control actions.</li>
+        <li><span class="badge phase">v1</span> Docker image with read-only volume mounts (state dirs + <code>docker.sock:ro</code>).</li>
+      </ul>
+      <h3>Best-effort in v1 (ships if cheap, may slip)</h3>
+      <ul>
+        <li><span class="badge open">best-effort</span> Codex connector token aggregation. Lands if the session-file format reliably exposes usage; otherwise the Codex card shows sessions/metadata only and token data is marked <code>unavailable</code>. Not a v1 gate.</li>
+      </ul>
+      <h3>Deferred (explicit cutline)</h3>
+      <ul>
+        <li>Additional connectors beyond Claude and best-effort Codex (OpenAI, others).</li>
+        <li>Push notifications / threshold alerts (window-near-limit warnings).</li>
+        <li>Any control actions (kill session, run task, start/stop/restart containers).</li>
+        <li>Historical retention beyond source files; trend charts over time.</li>
+        <li>Cost estimation in dollars / usage-credit tracking (needs a pricing table; revisit once token math is trusted).</li>
+        <li>Multi-host / remote workspace aggregation.</li>
+      </ul>
+    </section>
+
+    <section id="open-decisions">
+      <h2>Open Decisions</h2>
+      <div class="decision">
+        <div class="q">Q: How fresh must a session file be to count as "active"?</div>
+        <div><strong>Options:</strong> (a) file mtime within N minutes; (b) <code>startedAt</code> within N hours; (c) cross-check against latest transcript turn timestamp for that <code>cwd</code>. <strong>Tradeoff:</strong> (a) is simplest but mtime may not update during long idle turns; (c) is most accurate but couples the session and transcript collectors. <strong>Leaning:</strong> start with (a) at a generous threshold, add (c) if false "stale" reports appear.</div>
+      </div>
+      <div class="decision">
+        <div class="q">Q: Transcript parsing cost at tens of projects — full re-scan vs incremental?</div>
+        <div><strong>Options:</strong> (a) re-read every <code>.jsonl</code> on each cache rebuild; (b) byte-offset / incremental tracking — store <code>(path, mtime, line_count)</code> per file and only read newly appended lines on re-scan. <strong>Tradeoff:</strong> (a) is trivial and fine for tens of projects if cache TTL is reasonable; (b) is necessary only if scan latency becomes visible over large transcript archives. <strong>Leaning:</strong> (a) behind a short TTL for v1; (b) as a <strong>Phase 2</strong> perf optimization, not required for v1. Combined with the <code>b'"usage":'</code> prefilter, (a) should stay cheap at v1 scale.</div>
+      </div>
+      <div class="decision">
+        <div class="q">Q: Are the window limits available locally, or do we hardcode / go relative?</div>
+        <div>The widget needs a <code>limit</code> per window to show a percent. Claude's real 5-hour / weekly caps may not be written to any local file. <strong>Options:</strong> (a) hardcode the known plan caps as config (e.g. a <code>plan.yaml</code> the operator sets to match their subscription); (b) ship without absolute limits and show raw usage only (<code>percent = null</code>), upgrading to (a) if caps surface. <strong>Tradeoff:</strong> (a) reproduces the real widget but goes stale when Anthropic changes plan limits and must be maintained by hand; (b) is always correct but less glanceable. <strong>Leaning:</strong> (a) behind operator-set config, falling back to (b)'s raw-usage display when no limit is configured. <em>Blocks the percent display, not the rest of the spec.</em></div>
+      </div>
+      <div class="decision">
+        <div class="q">Q: What defines each quota window's reset boundary (<code>resets_at</code>)?</div>
+        <div><strong>Options:</strong> (a) fixed blocks anchored to first activity, mirroring Claude's real quota reset; (b) calendar-aligned (ISO week, calendar month) with a rolling 5-hour block. <strong>Tradeoff:</strong> (a) matches the "resets in X" the user sees in Claude's UI but requires knowing the anchor; (b) is unambiguous but the countdown won't line up with the real reset. <strong>Leaning:</strong> confirm Claude's actual reset semantics (esp. the 5-hour anchor) before locking; until then, calendar-align weekly/monthly and treat the 5-hour reset as the best-known approximation.</div>
+      </div>
+      <div class="decision">
+        <div class="q">Q: Where does the scheduled-task cadence come from?</div>
+        <div>Each routine is a folder under <code>~/.claude/scheduled-tasks/</code>. The schedule string lives in a per-folder config file whose exact name/format must be confirmed before <code>next_run</code> can be computed. Until then, list tasks by name and mark <code>schedule</code> as null.</div>
+      </div>
+    </section>
+
+    <section id="edge-cases">
+      <h2>Edge Cases &amp; Error Handling</h2>
+      <ul>
+        <li><span class="badge risk">risk</span> <strong>Orphaned session files:</strong> a crashed Claude process can leave a <code>&lt;pid&gt;.json</code> behind. Mitigation: freshness-based status; never claim "running" on file presence alone.</li>
+        <li><span class="badge risk">risk</span> <strong>Partial / truncated JSONL:</strong> a transcript being written mid-turn may have a half line. Mitigation: parse line-by-line, skip lines that fail JSON decode, continue.</li>
+        <li><span class="badge risk">risk</span> <strong>Schema drift:</strong> Claude/Codex change their on-disk formats between versions. Mitigation: tolerant parsing (missing keys default to zero/null), and a parse-error counter surfaced on <code>/healthz</code> rather than a hard crash.</li>
+        <li><strong>Missing mounts:</strong> a volume (e.g. <code>~/.codex</code>) not mounted. Mitigation: treat each source as optional; absent source contributes nothing and is flagged in the snapshot.</li>
+        <li><strong>Docker socket absent or unreachable:</strong> the socket isn't mounted, or the daemon is down. Mitigation: the Docker connector reports <code>available = false</code>, the "Docker" tab renders a "no data" state, and <code>docker_containers</code> is empty &mdash; no crash, the rest of the dashboard is unaffected.</li>
+        <li><strong>Container stats unavailable for a single container:</strong> a stopped/exited container has no live CPU/memory sample. Mitigation: list it with its status and uptime, leave the resource fields at zero/null rather than dropping the row.</li>
+        <li><strong>Timezone / window edges:</strong> turns near a window boundary must bucket by a consistent timezone. Mitigation: parse timestamps as UTC, define windows in a single configured TZ.</li>
+        <li><strong>Empty workspace:</strong> no sessions, no transcripts. Dashboard renders zeros, not errors.</li>
+        <li><strong>Large transcripts:</strong> long-running projects produce big <code>.jsonl</code> files. Mitigation: stream-read; cap memory by summing as we go, never loading whole files into a list.</li>
+      </ul>
+    </section>
+
+    <section id="security">
+      <h2>Security &amp; Privacy</h2>
+      <ul>
+        <li><strong>Sensitive content:</strong> transcripts contain full prompts and code, which may include secrets. The monitor reads them to count tokens but must never expose raw transcript text via the API or UI. Only aggregates and metadata leave the service.</li>
+        <li><strong>Read-only by construction:</strong> all source directories are mounted read-only in Docker, so a bug cannot corrupt a workspace. This is a primary safety property, not a convenience.</li>
+        <li><span class="badge risk">risk</span> <strong>Docker socket access:</strong> mounting <code>/var/run/docker.sock</code> with <code>:ro</code> is safe for monitoring &mdash; the connector can list containers and read stats, but cannot start, stop, or alter anything. <strong>The <code>:ro</code> flag is load-bearing.</strong> Removing it (mounting the socket read-write) hands the container <em>full control of the Docker daemon</em>, which is effectively root on the host. Treat any change that drops <code>:ro</code> as a security regression that must be reviewed, not a convenience tweak.</li>
+        <li><strong>No auth in v1:</strong> acceptable only because the service binds to localhost / a private network on a single-operator host. Do not expose the port publicly. If that changes, auth moves from non-goal to blocker.</li>
+        <li><strong>Path traversal:</strong> <code>/api/projects/{name}</code> takes a name from the client. Mitigation: resolve only against the discovered project set; reject anything not in the known list. Never build a filesystem path directly from user input.</li>
+        <li><strong>Resource exhaustion:</strong> a malicious or huge file should not OOM the service. Mitigation: streaming reads and the snapshot cache bound work per request.</li>
+      </ul>
+    </section>
+
+    <section id="testing">
+      <h2>Testing Strategy</h2>
+      <ul>
+        <li><strong>Unit:</strong> quota-window bucketing (turn/day timestamp &rarr; correct 5h/week/month window, including boundary timestamps); <code>percent</code> = used/limit with null-limit handling; <code>resets_at</code> computation; <code>TokenBreakdown</code> summation; stale-vs-active status logic.</li>
+        <li><strong>Integration:</strong> the Claude connector against fixture directories that mirror real layouts (<code>stats-cache.json</code>, a multi-line transcript with <code>usage</code> objects, a <code>&lt;pid&gt;.json</code> session, a scheduled-task folder). Assert the per-connector contribution and the merged snapshot. A stub connector verifies the registry merges multiple providers without core changes.</li>
+        <li><strong>Resilience:</strong> feed truncated JSONL, missing keys, and an absent mount; assert the service degrades to partial data and increments parse-error counters instead of crashing.</li>
+        <li><strong>API:</strong> <code>/api/snapshot</code> shape and <code>/api/projects/{name}</code> rejection of unknown/traversal names; <code>/api/docker</code> shape; <code>/healthz</code> reports source availability.</li>
+        <li><strong>Docker connector:</strong> against a fake/stub Docker client, assert containers map to <code>DockerContainer</code> rows (status, uptime, CPU/memory, port mappings) and that no mutating SDK call is ever issued. With the socket absent, assert <code>available = false</code> and an empty list rather than an exception.</li>
+        <li><strong>Manual:</strong> run against the real local mounts read-only; eyeball that totals are in the same ballpark as Claude's own UI for a known session.</li>
+      </ul>
+    </section>
+
+    <section id="success">
+      <h2>Success Criteria</h2>
+      <ul>
+        <li>The "IA" tab shows a Claude connector card with 5h / weekly / monthly windows, each rendering used, percent (when a limit is configured), and a "resets in X" countdown, refreshing without a manual reload.</li>
+        <li>Window usage for a known session matches Claude's own plan-usage widget within a small margin (percent within a few points when limits are configured).</li>
+        <li>Adding a second connector (e.g. Codex) requires only a new module under <code>connectors/</code>; the aggregator, API, and dashboard shell are untouched.</li>
+        <li>Active sessions appear within one cache TTL of their state file being written; stale ones are visibly distinguished.</li>
+        <li>Scheduled tasks are listed by name (cadence shown once the config format is confirmed).</li>
+        <li>The "Docker" tab lists running containers with name, image, status, uptime, CPU %, memory used/limit, and port mappings, refreshing on the same poll; with the socket unmounted it shows a clean "no data" state.</li>
+        <li>Service never writes to any mounted directory (verified by read-only mounts), never issues a mutating Docker call, and never returns raw transcript text.</li>
+        <li>A full snapshot rebuild over tens of projects completes fast enough that a poll feels instant (target: well under the poll interval).</li>
+        <li>Missing or malformed sources degrade gracefully: partial data, no crash.</li>
+      </ul>
+    </section>
+
+    <section id="open-questions">
+      <h2>Open Questions</h2>
+      <ul class="open-questions">
+        <li><span class="badge open">open</span> Are Claude's per-plan window limits (5h, weekly) available anywhere locally, or must the operator supply them as config? Drives whether the widget shows a percent or raw usage.</li>
+        <li><span class="badge open">open</span> Exact reset semantics vs Claude's real quota reset (anchored 5-hour blocks vs calendar-aligned), so the "resets in X" countdown matches the official widget.</li>
+        <li><span class="badge open">open</span> Config file name/format inside each <code>scheduled-tasks/&lt;routine&gt;/</code> folder that holds the cadence.</li>
+        <li><span class="badge open">open</span> Do Codex turn records expose token usage in every version, and under what key? This is why Codex token aggregation is best-effort, not a v1 guarantee.</li>
+        <li><span class="badge open">open</span> Should "agents" be distinguished from "sessions" in the UI, or are subagent runs not separately represented in state files?</li>
+        <li><span class="badge open">open</span> Poll interval and cache TTL values (start ~5s poll, short TTL; tune against real scan cost).</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Decisions Log</h2>
+      <div class="decision">
+        <div class="q">Q: Interface — web dashboard, CLI, or TUI?</div>
+        <div>Web dashboard. Best fit for an at-a-glance, always-open monitor and the only one that renders the cross-project rollups comfortably.</div>
+      </div>
+      <div class="decision">
+        <div class="q">Q: How to detect sessions/agents — process inspection or state files?</div>
+        <div>State files only. Process inspection from inside Docker needs privileged access the user won't grant, and state files are the clean, mount-friendly source of truth.</div>
+      </div>
+      <div class="decision">
+        <div class="q">Q: Language and framework?</div>
+        <div>Python + FastAPI. Fast to build a read-only JSON API plus a server-rendered page, strong JSON/JSONL parsing ergonomics, trivial to containerize.</div>
+      </div>
+      <div class="decision">
+        <div class="q">Q: Top-level abstraction — collectors or connectors?</div>
+        <div>Connectors. One self-contained module per AI provider (<code>connectors/claude.py</code>, later <code>connectors/codex.py</code>), each implementing a shared interface and owning its source, metrics, and display. The dashboard surfaces this directly as an "IA" tab with one card per connector. Rejected the flat "collectors" framing as the public abstraction because it leaked provider concerns into the core; collectors survive only as an internal detail inside a connector. This is what makes adding OpenAI/others a drop-in.</div>
+      </div>
+      <div class="decision">
+        <div class="q">Q: Headline metric — quota windows or rolling token sums?</div>
+        <div>Quota windows. The dashboard reproduces Claude's plan-usage widget (used vs. limit, percent, "resets in X") rather than a sliding projection, because that is the at-a-glance view the user actually reasons about. Rolling raw sums are kept only as the underlying <code>used</code> breakdown.</div>
+      </div>
+      <div class="decision">
+        <div class="q">Q: Token source — stats-cache or transcripts?</div>
+        <div>Both, by role. <code>stats-cache.json</code> gives cheap per-day rollups for the coarse window usage (the fast path); transcripts (each turn's <code>usage</code> object) provide finer-grained, per-turn counts for sub-day windows like the 5-hour bucket. This mirrors how Claude computes its own stats.</div>
+      </div>
+      <div class="decision">
+        <div class="q">Q: Codex token tracking — v1 guarantee or best-effort?</div>
+        <div>Best-effort, and behind its own (later) connector. Codex session-file formats vary and don't always expose token usage, so promising exact Codex totals in v1 would be dishonest. Where usage is present the connector aggregates it; where it isn't, the card shows sessions/metadata and marks token data <code>unavailable</code>. v1 ships the Claude connector; Codex is a fast-follow that doesn't gate v1.</div>
+      </div>
+      <div class="decision">
+        <div class="q">Q: Notifications in v1?</div>
+        <div>No. v1 is passive observation; the user checks the dashboard. Push/alerts deferred to avoid scope creep before the core metrics are trusted.</div>
+      </div>
+      <div class="decision">
+        <div class="q">Q: Read-only or control actions?</div>
+        <div>Read-only. Safer, simpler, and enforced by read-only Docker mounts. Control surface deferred.</div>
+      </div>
+      <div class="decision">
+        <div class="q">Q: Docker monitoring — read-only socket mount or write access?</div>
+        <div>Read-only socket mount (<code>-v /var/run/docker.sock:/var/run/docker.sock:ro</code>), via the Docker SDK for Python. Ruled out write (read-write) access: a writable socket is full control of the Docker daemon, which is effectively host root, and it would break the read-only-by-construction guarantee that the rest of the tool relies on. Container start/stop/restart is therefore out of scope for v1. The connector reads container list + stats + ports only; the <code>:ro</code> flag makes "observe-only" a structural property, not a code convention. Chose the socket over PID-namespace inspection because the socket is the daemon's own supported query interface and mounts cleanly without privileged access.</div>
+      </div>
+      <div class="decision">
+        <div class="q">Q: Storage — database or filesystem?</div>
+        <div>No database. The mounted state files are the store; derived metrics live in an in-process snapshot cache. Tens of projects don't justify the operational weight of a DB.</div>
+      </div>
+    </section>
+
+    <section id="prior-art">
+      <h2>Prior Art &amp; References</h2>
+      <p>The Claude token-tracking and session-activity approach draws on existing open-source tools that parse the same <code>~/.claude</code> transcript format. Key findings adopted from them:</p>
+      <ul>
+        <li><strong>claude-code-dashboard</strong> — time-based session activity (derive <code>thinking</code>/<code>active</code>/<code>idle</code> from <code>lastEventAt</code> rather than process inspection).</li>
+        <li><strong>Community token-counting tools</strong> — the streaming-dedup insight: multiple partial JSONL records per <code>message.id</code>, only the last carries final counts; drop zero-token turns. Also the <code>costUSD</code>-is-already-written and <code>isSidechain</code>-filtering observations, the tiered <code>cache_creation</code> shape, and the <code>b'"usage":'</code> prefilter for cheap line skipping.</li>
+      </ul>
+      <p>These are credited because v1's correctness (especially not inflating token counts) depends on matching how these tools read the format. Where this spec diverges, it's noted inline.</p>
+    </section>
+  </main>
+
+  <script>
+    const sections = document.querySelectorAll('section[id]');
+    const links    = document.querySelectorAll('nav a');
+    let scrollLock = false;
+    let lockTimer;
+    function setActive(id) {
+      links.forEach(l => l.classList.remove('active'));
+      const active = document.querySelector(`nav a[href="#${id}"]`);
+      if (active) active.classList.add('active');
+    }
+    links.forEach(link => {
+      link.addEventListener('click', e => {
+        e.preventDefault();
+        const id = link.getAttribute('href').slice(1);
+        const target = document.getElementById(id);
+        if (!target) return;
+        setActive(id);
+        scrollLock = true;
+        clearTimeout(lockTimer);
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        lockTimer = setTimeout(() => { scrollLock = false; }, 900);
+      });
+    });
+    window.addEventListener('scroll', () => {
+      if (scrollLock) return;
+      let closest = null;
+      let minDist  = Infinity;
+      sections.forEach(s => {
+        const dist = Math.abs(s.getBoundingClientRect().top);
+        if (dist < minDist) { minDist = dist; closest = s.id; }
+      });
+      if (closest) setActive(closest);
+    }, { passive: true });
+  </script>
+</body>
+</html>
