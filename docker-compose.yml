@@ -7,9 +7,9 @@ services:
     volumes:
       # Read-only state mounts — the :ro suffix is load-bearing.
       # Removing :ro from the docker socket would grant full daemon control (host root).
-      - "${HOME}/.claude:/home/appuser/.claude:ro"
-      - "${HOME}/.codex:/home/appuser/.codex:ro"
+      - "${HOME}/.claude:/root/.claude:ro"
+      - "${HOME}/.codex:/root/.codex:ro"
       - ${HOME}/.orbstack/run/docker.sock:/var/run/docker.sock:ro  # OrbStack socket (macOS)
     environment:
-      - HOME=/home/appuser
+      - HOME=/root
     restart: unless-stopped
